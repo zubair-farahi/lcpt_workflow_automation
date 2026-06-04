@@ -1,0 +1,18 @@
+{
+  "requestId": "6a0b4f76e2ecd2e7dbbc11ee",
+  "status": "COMPLETED",
+  "extractedInfo": {
+    "companyName": "Pacific First Group",
+    "workRequestNumber": "PFG-WR-351",
+    "routingInternal": "x",
+    "routingExternal": "x",
+    "processThroughStateAgency": "x",
+    "receiveCredentials": "",
+    "complete": "",
+    "additionalNotes": "",
+    "completedBy": "Jane Smith",
+    "date": "2024-01-15"
+  },
+  "createdAt": "2026-01-15T10:00:00.000Z",
+  "updatedAt": "2026-01-15T10:00:15.000Z"
+}

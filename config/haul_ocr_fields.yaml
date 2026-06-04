@@ -1,0 +1,29 @@
+# HaulSafe OCR field definitions for the LCPT cover sheet
+#
+# fieldName — the name sent to and returned by HaulSafe OCR
+# fieldType — TEXT or DATE (confirm supported values with HaulSafe if needed)
+#
+# TODO: confirm that HaulSafe can reliably detect checkboxes from scanned PDFs
+# TODO: confirm whether fieldName casing must match exactly (API may be case-sensitive)
+
+fields:
+  - fieldName: companyName
+    fieldType: TEXT
+  - fieldName: workRequestNumber
+    fieldType: TEXT
+  - fieldName: routingInternal
+    fieldType: TEXT
+  - fieldName: routingExternal
+    fieldType: TEXT
+  - fieldName: processThroughStateAgency
+    fieldType: TEXT
+  - fieldName: receiveCredentials
+    fieldType: TEXT
+  - fieldName: complete
+    fieldType: TEXT
+  - fieldName: additionalNotes
+    fieldType: TEXT
+  - fieldName: completedBy
+    fieldType: TEXT
+  - fieldName: date
+    fieldType: DATE

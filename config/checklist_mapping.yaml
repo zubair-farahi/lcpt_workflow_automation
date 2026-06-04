@@ -1,0 +1,37 @@
+# Checklist item mapping for LCPT Scan Automation
+#
+# Each entry maps a (task_type, cover_sheet_action) pair to the exact
+# checklist item name as it appears in CP Suite.
+#
+# task_type           — the CP Suite task type string (exact match)
+# action              — one of: PROCESS_THROUGH_STATE_AGENCY | RECEIVE_CREDENTIALS | COMPLETE
+# checklist_item_name — exact name of the checklist item in CP Suite (case-insensitive match at runtime)
+#
+# TODO: Replace placeholder task_type values and checklist_item_name values with
+#       the real David Lorge mapping table once confirmed.
+
+mappings:
+  # ── Placeholder entries — UPDATE with real values ──────────────────────────
+  - task_type: "PLACEHOLDER_TASK_TYPE_A"
+    action: "PROCESS_THROUGH_STATE_AGENCY"
+    checklist_item_name: "Process through state agency"
+
+  - task_type: "PLACEHOLDER_TASK_TYPE_A"
+    action: "RECEIVE_CREDENTIALS"
+    checklist_item_name: "Receive credentials"
+
+  - task_type: "PLACEHOLDER_TASK_TYPE_A"
+    action: "COMPLETE"
+    checklist_item_name: "Complete"
+
+  - task_type: "PLACEHOLDER_TASK_TYPE_B"
+    action: "PROCESS_THROUGH_STATE_AGENCY"
+    checklist_item_name: "Process through state agency"
+
+  - task_type: "PLACEHOLDER_TASK_TYPE_B"
+    action: "RECEIVE_CREDENTIALS"
+    checklist_item_name: "Receive credentials"
+
+  - task_type: "PLACEHOLDER_TASK_TYPE_B"
+    action: "COMPLETE"
+    checklist_item_name: "Complete"

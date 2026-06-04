@@ -1,0 +1,18 @@
+# Company name → WR number prefix mapping for LCPT Scan Automation
+#
+# When company_prefix_validation_required=true, the company name on the cover
+# sheet must match one of the names listed under the WR number prefix.
+#
+# The WR prefix is the text before "-WR-" in the Work Request number.
+# Example: for PFG-WR-351, the prefix is "PFG".
+#
+# Matching is case-insensitive.
+#
+# TODO: Populate with real company / prefix pairs once confirmed.
+
+prefix_to_companies:
+  # PFG:
+  #   - "Pacific First Group"
+  #   - "PFG Inc"
+  #
+  # Add entries following the pattern above.

@@ -1,0 +1,139 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Secrets — NEVER commit these
+# ─────────────────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Postman environments can contain api keys / passwords. Commit the COLLECTION
+# but keep the environment files local. Remove this line if yours are clean.
+*.postman_environment.json
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Type checking / linting
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Virtual environments
+# ─────────────────────────────────────────────────────────────────────────────
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Local runtime artefacts (this project)
+# ─────────────────────────────────────────────────────────────────────────────
+# Local file-based storage adapter writes here
+data/
+
+# Local review queue writes JSON files here
+review_queue/
+
+# SQLite idempotency store
+*.db
+*.sqlite
+*.sqlite3
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Editors & IDEs
+# ─────────────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+.spyderproject
+.spyproject
+.ropeproject
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS files
+# ─────────────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tooling
+# ─────────────────────────────────────────────────────────────────────────────
+# Claude / Cursor / Copilot local config
+.claude/
+.cursor/
+
+# uv / poetry / pipenv / pdm
+.uv-cache/
+uv.lock
+poetry.lock
+Pipfile.lock
+pdm.lock
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Logs
+# ─────────────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Local scratch / scratchpad
+# ─────────────────────────────────────────────────────────────────────────────
+scratch/
+tmp/
+*.tmp
