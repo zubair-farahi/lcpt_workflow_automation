@@ -1,23 +1,32 @@
 """Local CLI for LCPT Scan Automation.
 
+Two production-shaped runtime modes are supported:
+
+    Mode 3:  Real S3 + real HaulSafe OCR + mocked CP Suite
+             (use while waiting on CP Suite staging credentials)
+                lcpt-scan process-s3 --key incoming/scan.pdf --mock-cp
+
+    Mode 4:  Real S3 + real HaulSafe OCR + real CP Suite (full end-to-end)
+                lcpt-scan process-s3 --key incoming/scan.pdf
+
 Commands:
-    process          — full pipeline from a local PDF file (mock or real OCR)
-    process-s3       — full pipeline from an S3 object
+    process-s3       — full pipeline from an S3 object (Mode 3 or 4)
     list-s3          — list objects in the S3 bucket (optionally filter by prefix)
-    callback         — simulate an OCR callback from a JSON payload file
+    check-s3-access  — diagnose S3 bucket access and IAM permissions
     submit-ocr       — submit a document URL to the real HaulSafe OCR API
     get-ocr-result   — fetch an OCR result by request ID
     test-ocr         — submit + poll until complete, print normalized cover sheet
-    check-s3-access  — diagnose S3 bucket access and IAM permissions
+    cp-suite-token   — fetch a CP Suite bearer token (verifies auth works)
+    cp-suite-get-wr  — fetch a Work Request (and optionally its tasks/items)
+    callback         — feed a saved OCR JSON payload into the pipeline (debug only)
 
 Examples:
-    python -m lcpt_scan_automation.entrypoints.local_cli process --file ./samples/scan.pdf
-    python -m lcpt_scan_automation.entrypoints.local_cli process-s3 --bucket fw-ocr-project --key incoming/scan.pdf
-    python -m lcpt_scan_automation.entrypoints.local_cli list-s3
-    python -m lcpt_scan_automation.entrypoints.local_cli list-s3 --prefix incoming/
-    python -m lcpt_scan_automation.entrypoints.local_cli check-s3-access
-    python -m lcpt_scan_automation.entrypoints.local_cli test-ocr --document-url "https://example.com/cover.pdf"
-    python -m lcpt_scan_automation.entrypoints.local_cli callback --request-id abc123 --payload ./samples/ocr/valid_cover_sheet_completed.json
+    lcpt-scan process-s3 --key incoming/scan.pdf --mock-cp     # Mode 3
+    lcpt-scan process-s3 --key incoming/scan.pdf               # Mode 4
+    lcpt-scan list-s3 --prefix incoming/
+    lcpt-scan check-s3-access
+    lcpt-scan test-ocr --document-url "https://..."
+    lcpt-scan cp-suite-get-wr --wr-number PFG-WR-351 --show-tasks
 """
 
 from __future__ import annotations
@@ -41,55 +50,24 @@ def _get_settings():
     return s
 
 
-# ── process (local file) ──────────────────────────────────────────────────────
-
-@app.command()
-def process(
-    file: Annotated[Path, typer.Option(help="Path to the scanned PDF file")] = ...,
-    mock_cp: Annotated[bool, typer.Option(help="Use mock CP Suite client")] = True,
-    mock_ocr: Annotated[bool, typer.Option(help="Use mock OCR client (skips real API)")] = False,
-) -> None:
-    """Run the full scan pipeline against a local PDF file."""
-    from ..domain.models import ScanEvent
-    from ..infrastructure.storage.local_storage import compute_file_hash
-    from .container import build_process_scan_use_case
-
-    if not file.exists():
-        typer.echo(f"Error: file not found: {file}", err=True)
-        raise typer.Exit(1)
-
-    settings = _get_settings()
-    use_case = build_process_scan_use_case(settings, use_mock_ocr=mock_ocr, use_mock_cp=mock_cp)
-
-    # Use content hash as local etag for proper idempotency
-    content_hash = compute_file_hash(file)
-    event = ScanEvent(source_path=str(file.resolve()), etag=content_hash)
-
-    typer.echo(f"Processing {file} (content-hash: {content_hash[:12]}...) ...")
-    try:
-        record = use_case.execute(event)
-    except Exception as exc:
-        typer.echo(f"Pipeline error: {exc}", err=True)
-        raise typer.Exit(1)
-
-    typer.echo(json.dumps({"scan_id": record.scan_id, "state": record.state}, indent=2))
-
-
 # ── process-s3 ────────────────────────────────────────────────────────────────
 
 @app.command(name="process-s3")
 def process_s3(
     bucket: Annotated[str, typer.Option(help="S3 bucket name")] = "fw-ocr-project",
     key: Annotated[str, typer.Option(help="S3 object key (e.g. incoming/scan.pdf)")] = ...,
-    mock_cp: Annotated[bool, typer.Option(help="Use mock CP Suite client")] = True,
-    mock_ocr: Annotated[bool, typer.Option(help="Use mock OCR client")] = False,
-    save_local: Annotated[bool, typer.Option(help="Download from S3 but save split files on this machine instead of back to S3")] = False,
-    local_output_dir: Annotated[str, typer.Option(help="Local folder to save files when --save-local is set")] = "./data",
+    mock_cp: Annotated[
+        bool,
+        typer.Option(
+            "--mock-cp/--real-cp",
+            help="Use mock CP Suite client (Mode 3). Disable for Mode 4 (full end-to-end).",
+        ),
+    ] = True,
 ) -> None:
-    """Process a scan from S3.
+    """Process a scan from S3 end-to-end (Mode 3 or Mode 4).
 
-    By default, split files (cover sheet + packet) are written back to S3.
-    Use --save-local to download from S3 but keep all output on your machine.
+    Real S3 + real HaulSafe OCR are always used.
+    CP Suite is mocked by default (Mode 3); pass --real-cp for Mode 4.
     """
     from ..domain.models import ScanEvent
     from ..infrastructure.storage.s3_storage import S3Storage
@@ -105,6 +83,8 @@ def process_s3(
         aws_secret_access_key=settings.aws_secret_access_key or None,
     )
 
+    mode_label = "Mode 3 (real S3 + real OCR + mocked CP)" if mock_cp else "Mode 4 (full end-to-end)"
+    typer.echo(f"Mode: {mode_label}")
     typer.echo(f"Fetching metadata: s3://{bucket}/{key} ...")
     try:
         metadata = s3.get_object_metadata(key)
@@ -114,56 +94,15 @@ def process_s3(
 
     typer.echo(f"  ETag: {metadata.etag}  Size: {metadata.size} bytes")
 
-    if save_local:
-        # ── Download from S3, then run entirely with LocalStorage ──────────────
-        # Split files land on disk; no writes back to S3.
-        from pathlib import Path
-        from ..infrastructure.storage.local_storage import LocalStorage, compute_file_hash
-
-        out_dir = Path(local_output_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        filename = Path(key).name
-        local_pdf = out_dir / filename
-
-        typer.echo(f"Downloading to {local_pdf} ...")
-        try:
-            local_pdf.write_bytes(s3.read_bytes(key))
-        except Exception as exc:
-            typer.echo(f"Download failed: {exc}", err=True)
-            raise typer.Exit(1)
-
-        typer.echo(f"Saved {local_pdf.stat().st_size:,} bytes -> {local_pdf}")
-
-        content_hash = compute_file_hash(local_pdf)
-        event = ScanEvent(source_path=str(local_pdf.resolve()), etag=content_hash)
-
-        # When using mock OCR the URL is never actually fetched, so a
-        # placeholder is enough to satisfy LocalStorage.generate_accessible_url.
-        base_url = settings.local_storage_base_url or ("http://localhost:9999/files" if mock_ocr else "")
-        settings_local = settings.model_copy(update={
-            "local_storage_dir": str(out_dir),
-            "local_storage_base_url": base_url,
-        })
-        use_case = build_process_scan_use_case(
-            settings_local,
-            use_mock_ocr=mock_ocr,
-            use_mock_cp=mock_cp,
-            use_s3=False,
-        )
-        typer.echo(f"Running pipeline (local mode) — output goes to {out_dir}/processing/ ...")
-    else:
-        # ── Read AND write via S3 ──────────────────────────────────────────────
-        event = ScanEvent(source_path=key, etag=metadata.etag)
-        settings_s3 = settings.model_copy(update={"lcpt_scan_bucket": bucket})
-        use_case = build_process_scan_use_case(
-            settings_s3,
-            use_mock_ocr=mock_ocr,
-            use_mock_cp=mock_cp,
-            use_s3=True,
-            s3_client=s3._client,
-        )
-        typer.echo(f"Running pipeline (S3 mode) for s3://{bucket}/{key} ...")
+    event = ScanEvent(source_path=key, etag=metadata.etag)
+    settings_s3 = settings.model_copy(update={"lcpt_scan_bucket": bucket})
+    use_case = build_process_scan_use_case(
+        settings_s3,
+        use_mock_cp=mock_cp,
+        use_s3=True,
+        s3_client=s3._client,
+    )
+    typer.echo(f"Running pipeline for s3://{bucket}/{key} ...")
 
     try:
         record = use_case.execute(event)
@@ -172,13 +111,6 @@ def process_s3(
         raise typer.Exit(1)
 
     typer.echo(json.dumps({"scan_id": record.scan_id, "state": record.state}, indent=2))
-
-    if save_local:
-        from pathlib import Path
-        scan_dir = Path(local_output_dir) / "processing" / record.scan_id
-        typer.echo(f"\nLocal output:")
-        typer.echo(f"  Cover sheet : {scan_dir}/cover_sheet.pdf")
-        typer.echo(f"  Packet      : {scan_dir}/packet.pdf")
 
 
 # ── list-s3 ───────────────────────────────────────────────────────────────────
