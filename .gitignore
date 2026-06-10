@@ -71,7 +71,8 @@ env/
 # ─────────────────────────────────────────────────────────────────────────────
 # Local file-based storage adapter writes here
 data/
-
+downloaded_pdfs/
+do
 # Local review queue writes JSON files here
 review_queue/
 

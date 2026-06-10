@@ -17,3 +17,11 @@ class PdfProcessorPort(Protocol):
         The original bytes are never modified.
         """
         ...
+
+    def render_pdf_to_png(self, pdf_bytes: bytes, dpi: int = 200) -> bytes:
+        """Render page 0 of the PDF as a PNG image (form fields flattened).
+
+        Used because the OCR service cannot ingest PDFs directly.
+        Raises PdfProcessingError if rendering fails.
+        """
+        ...

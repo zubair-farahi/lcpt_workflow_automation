@@ -155,10 +155,19 @@ class ProcessScanUseCase:
 
         log.info("pdf_split", total_pages=split.total_pages)
 
-        # 3. Store split files so they are reachable later
-        cover_key = f"processing/{record.scan_id}/cover_sheet.pdf"
+        # 3. Render the cover sheet to PNG and store alongside the packet.
+        #    HaulSafe's vision AI 500s on raw PDFs, so OCR gets an image.
+        #    Render from the ORIGINAL bytes (page 0): splitting via pypdf
+        #    strips the /AcroForm dict, which would blank out filled form
+        #    fields in the rendered image.
+        try:
+            cover_png_bytes = self._pdf.render_pdf_to_png(pdf_bytes)
+        except PdfProcessingError as exc:
+            return self._to_review(record, ReviewReasonCode.UNEXPECTED_ERROR, str(exc), None)
+
+        cover_key = f"processing/{record.scan_id}/cover_sheet.png"
         packet_key = f"processing/{record.scan_id}/packet.pdf"
-        self._storage.write_bytes(cover_key, split.cover_sheet_bytes)
+        self._storage.write_bytes(cover_key, cover_png_bytes)
         self._storage.write_bytes(packet_key, split.packet_bytes)
 
         # 4. Get accessible URL for cover sheet page (OCR requirement)

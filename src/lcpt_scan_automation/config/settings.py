@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     company_prefix_validation_required: bool = False
     wr_number_pattern: str = r"^[A-Z]{2,6}-WR-\d+$"
 
+    # ── User filtering for S3 watcher ─────────────────────────────────────
+    lcpt_skip_users: str = ""        # Comma-separated reps to skip
+    lcpt_include_users: str = ""     # Comma-separated reps to process (empty = all)
+
     # ── Config file paths ─────────────────────────────────────────────────────
     checklist_mapping_path: str = "./config/checklist_mapping.yaml"
     company_prefix_mapping_path: str = "./config/company_prefix_mapping.yaml"

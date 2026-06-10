@@ -6,14 +6,20 @@ auth details provided by the CP Suite team.
 Base URL (staging): https://cp3-staging.itscomply.com/task-manager-api
 Auth: Bearer (JWT) via CpSuiteTokenProvider (OAuth2 password grant).
 
-Confirmed endpoints used:
-    GET   /api/work-requests/{displayId}                      -> WorkRequestDto
-    GET   /api/work-requests/{workRequestId}/tasks            -> WorkRequestTasksDto
-    GET   /api/tasks/{cpTaskId}/checklistItems                -> CpTaskChecklistItemDto[]
-    PATCH /api/tasks/checklistItems/{cpTaskChecklistItemId}   -> 200
-    POST  /api/work-requests/{workRequestId}/system-notes     -> WorkRequestNoteDto
-    POST  /api/work-request-files/{fileCategory}/{locationId}/{objectId}/{parentObjectId}
-    POST  /api/work-request-internal-files/{fileCategory}/{locationId}/{objectId}/{parentObjectId}
+Confirmed endpoints used (NOTE: the Swagger spec lists these under /api/ but
+the live API serves them WITHOUT the /api/ segment — confirmed empirically
+against staging on 2026-06-09. Base URL already includes the /task-manager-api
+mount prefix, e.g. https://cp3-staging.itscomply.com/task-manager-api):
+    GET   /work-requests/{displayId}                      -> WorkRequestDto
+    GET   /work-requests/{workRequestId}/tasks            -> WorkRequestTasksDto
+    GET   /tasks/{cpTaskId}/checklistItems                -> CpTaskChecklistItemDto[]
+    PATCH /tasks/{cpTaskId}/checklistItems/{cpTaskChecklistItemId}   -> 200
+          (Swagger says /tasks/checklistItems/{id} (flat) but the live
+           API uses the nested /tasks/{taskId}/checklistItems/{itemId}
+           form — confirmed by watching the UI network tab on 2026-06-09.)
+    POST  /work-requests/{workRequestId}/system-notes     -> WorkRequestNoteDto
+    POST  /work-request-files/{fileCategory}/{locationId}/{objectId}/{parentObjectId}
+    POST  /work-request-internal-files/{fileCategory}/{locationId}/{objectId}/{parentObjectId}
 
 TODO (attachment endpoints — confirm with CP Suite before production use):
     - exact value of {fileCategory}
@@ -56,7 +62,7 @@ class CpSuiteHttpClient:
     # ── Work Request ───────────────────────────────────────────────────────────
 
     def get_work_request(self, wr_number: str) -> WorkRequest:
-        resp = self._request("GET", f"/api/work-requests/{wr_number}")
+        resp = self._request("GET", f"/work-requests/{wr_number}")
         data = self._parse_json(resp)
         return WorkRequest(
             work_request_id=data["workRequestId"],
@@ -71,7 +77,7 @@ class CpSuiteHttpClient:
     # ── Tasks ──────────────────────────────────────────────────────────────────
 
     def get_tasks(self, wr_id: str) -> list[Task]:
-        resp = self._request("GET", f"/api/work-requests/{wr_id}/tasks")
+        resp = self._request("GET", f"/work-requests/{wr_id}/tasks")
         data = self._parse_json(resp)
         tasks_raw = data.get("workRequestTasks") or []
         return [
@@ -89,7 +95,7 @@ class CpSuiteHttpClient:
     # ── Checklist items ────────────────────────────────────────────────────────
 
     def get_checklist_items(self, task_id: str) -> list[ChecklistItem]:
-        resp = self._request("GET", f"/api/tasks/{task_id}/checklistItems")
+        resp = self._request("GET", f"/tasks/{task_id}/checklistItems")
         items = self._parse_json(resp)
         if not isinstance(items, list):
             raise CpSuiteError(f"Expected a list of checklist items, got: {type(items)}")
@@ -104,19 +110,30 @@ class CpSuiteHttpClient:
         ]
 
     def mark_checklist_item_complete(self, task_id: str, item_id: str) -> None:
+        """Mark a single checklist item as complete.
+
+        The live API expects RFC 6902 JSON Patch (an array of ops), NOT the
+        flat `{ "updatedFields": [...] }` shape that the Swagger spec
+        suggested. Confirmed empirically against staging on 2026-06-09 —
+        the flat shape produced HTTP 500 "JSON patch document was malformed".
+        """
         now = datetime.now(tz=timezone.utc).isoformat()
-        body = {
-            "updatedFields": ["isCompleted", "completedDate"],
-            "isCompleted": True,
-            "completedDate": now,
-        }
-        self._request("PATCH", f"/api/tasks/checklistItems/{item_id}", json=body)
+        patch_doc = [
+            {"op": "replace", "path": "/isCompleted", "value": True},
+            {"op": "replace", "path": "/completedDate", "value": now},
+        ]
+        self._request(
+            "PATCH",
+            f"/tasks/{task_id}/checklistItems/{item_id}",
+            json=patch_doc,
+            extra_headers={"Content-Type": "application/json-patch+json"},
+        )
 
     # ── System note ────────────────────────────────────────────────────────────
 
     def add_system_note(self, wr_id: str, note: str) -> None:
         body: dict[str, Any] = {"workRequestId": wr_id, "note": note}
-        self._request("POST", f"/api/work-requests/{wr_id}/system-notes", json=body)
+        self._request("POST", f"/work-requests/{wr_id}/system-notes", json=body)
 
     # ── Attachments ────────────────────────────────────────────────────────────
 
@@ -149,7 +166,7 @@ class CpSuiteHttpClient:
         parent_object_id = work_request.work_request_id
 
         prefix = "work-request-internal-files" if internal else "work-request-files"
-        path = f"/api/{prefix}/{self._file_category}/{location_id}/{object_id}/{parent_object_id}"
+        path = f"/{prefix}/{self._file_category}/{location_id}/{object_id}/{parent_object_id}"
 
         files = {"file": (filename, pdf_bytes, "application/pdf")}
         form: dict[str, str] = {"objectDisplayName": filename, "setAsPrimary": "false"}
@@ -168,11 +185,16 @@ class CpSuiteHttpClient:
         json: Any = None,
         files: Any = None,
         data: Any = None,
+        extra_headers: dict[str, str] | None = None,
     ) -> httpx.Response:
         url = f"{self._base}{path}"
         headers = {"Authorization": f"Bearer {self._tokens.get_token()}"}
         if json is not None:
             headers["Content-Type"] = "application/json"
+        # Callers can override or add headers (e.g. application/json-patch+json
+        # for RFC 6902 PATCH bodies). Override last so it wins over defaults.
+        if extra_headers:
+            headers.update(extra_headers)
         try:
             resp = self._client.request(
                 method, url, headers=headers, json=json, files=files, data=data
