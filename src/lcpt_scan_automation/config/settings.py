@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     wr_number_pattern: str = r"^[A-Z]{2,6}-WR-\d+$"
 
     # ── User filtering for S3 watcher ─────────────────────────────────────
+    # GUID of the CP Suite note tab to post automation notes to
+    # (empty = server default, which lands in the PUBLIC tab)
+    cp_suite_note_tab_type_id: str = ""
+
     lcpt_skip_users: str = ""        # Comma-separated reps to skip
     lcpt_include_users: str = ""     # Comma-separated reps to process (empty = all)
 

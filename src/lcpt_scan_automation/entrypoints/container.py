@@ -117,4 +117,5 @@ def _build_real_cp_client(settings: Settings):
         file_category=settings.cp_suite_file_category,
         user_id=settings.cp_suite_user_id,
         timeout_seconds=settings.cp_suite_timeout_seconds,
+        note_tab_type_id=settings.cp_suite_note_tab_type_id,
     )

@@ -11,6 +11,14 @@
 #       the real David Lorge mapping table once confirmed.
 
 mappings:
+  # ── DEMO ENTRY (staging only) ───────────────────────────────────────────
+  # Maps the Smoke Test Client SPH task type to its "Response Received"
+  # item so the E2E demo can mark something visible on STC-WR-154.
+  # Remove once David Lorge's real mapping table lands.
+  - task_type: "a1f2b3c4-d5e6-4a7b-8c9d-0e1f2a3b4c5d"
+    action: "RECEIVE_CREDENTIALS"
+    checklist_item_name: "Response Received"
+
   # ── Placeholder entries — UPDATE with real values ──────────────────────────
   - task_type: "PLACEHOLDER_TASK_TYPE_A"
     action: "PROCESS_THROUGH_STATE_AGENCY"

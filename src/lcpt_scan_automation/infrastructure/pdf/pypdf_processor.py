@@ -61,6 +61,8 @@ class PypdfProcessor:
                 "Install with: pip install pypdfium2"
             ) from exc
 
+        doc = None
+        page = None
         try:
             doc = pdfium.PdfDocument(pdf_bytes)
             try:
@@ -79,3 +81,10 @@ class PypdfProcessor:
             return buf.getvalue()
         except Exception as exc:
             raise PdfProcessingError(f"Failed to render PDF page 0 to PNG: {exc}") from exc
+        finally:
+            # Explicitly release PDFium handles (avoids "objects still open"
+            # warnings and native-memory leaks in long-lived processes).
+            if page is not None:
+                page.close()
+            if doc is not None:
+                doc.close()

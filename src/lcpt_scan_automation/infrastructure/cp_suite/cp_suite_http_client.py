@@ -29,6 +29,7 @@ TODO (attachment endpoints — confirm with CP Suite before production use):
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -52,11 +53,13 @@ class CpSuiteHttpClient:
         file_category: str = "Document",
         user_id: str = "",
         timeout_seconds: float = 30.0,
+        note_tab_type_id: str = "",
     ) -> None:
         self._base = base_url.rstrip("/")
         self._tokens = token_provider
         self._file_category = file_category
         self._user_id = user_id or None
+        self._note_tab_type_id = note_tab_type_id or None
         self._client = httpx.Client(timeout=timeout_seconds)
 
     # ── Work Request ───────────────────────────────────────────────────────────
@@ -132,8 +135,20 @@ class CpSuiteHttpClient:
     # ── System note ────────────────────────────────────────────────────────────
 
     def add_system_note(self, wr_id: str, note: str) -> None:
+        """Post a note to the WR.
+
+        The UI posts to /work-requests/{id}/notes with a noteTabTypeId GUID
+        that selects the tab (Public / Provider / System). Confirmed
+        empirically 2026-06-09. The legacy /system-notes path also accepts
+        posts but lands them in the PUBLIC tab — do not use it.
+
+        The tab GUID comes from settings (cp_suite_note_tab_type_id) so we
+        can switch automation notes to the System tab once we learn its GUID.
+        """
         body: dict[str, Any] = {"workRequestId": wr_id, "note": note}
-        self._request("POST", f"/work-requests/{wr_id}/system-notes", json=body)
+        if self._note_tab_type_id:
+            body["noteTabTypeId"] = self._note_tab_type_id
+        self._request("POST", f"/work-requests/{wr_id}/notes", json=body)
 
     # ── Attachments ────────────────────────────────────────────────────────────
 
@@ -151,27 +166,49 @@ class CpSuiteHttpClient:
         *,
         internal: bool,
     ) -> None:
-        # TODO: confirm these path params with CP Suite.
-        #   fileCategory  - using configured value (default "Document")
-        #   locationId    - using the WR's locationId
-        #   objectId      - using the workRequestId
-        #   parentObjectId- using the workRequestId (best guess)
-        location_id = work_request.location_id
-        if not location_id:
+        # Path confirmed empirically against staging (2026-06-09) by capturing
+        # the UI's own upload request:
+        #   POST /{prefix}/work-request/{clientRootLocationId}/{wrId}/{wrId}
+        # Note: the second segment is the literal object type "work-request"
+        # (NOT a file category), and the location segment is the WR's
+        # clientRootLocationId (NOT its locationId).
+        root_location_id = work_request.client_root_location_id
+        if not root_location_id:
             raise CpSuiteError(
-                "Cannot attach PDF: WorkRequest is missing locationId "
+                "Cannot attach PDF: WorkRequest is missing clientRootLocationId "
                 "(required by the attachment endpoint)."
             )
         object_id = work_request.work_request_id
         parent_object_id = work_request.work_request_id
 
         prefix = "work-request-internal-files" if internal else "work-request-files"
-        path = f"/{prefix}/{self._file_category}/{location_id}/{object_id}/{parent_object_id}"
+        path = f"/{prefix}/work-request/{root_location_id}/{object_id}/{parent_object_id}"
 
+        # Multipart form mirrors the UI's own upload (captured 2026-06-09):
+        #   file              - the binary
+        #   metaData          - JSON string with document type + location IDs
+        #   objectDisplayName - the object TYPE label ("Work Request"),
+        #                       NOT the filename
+        #   setAsPrimary      - "false" for supplementary packet attachments
+        meta = {
+            "workRequestDisplayId": work_request.work_request_number,
+            "documentType": "Work Request",
+            "documentName": None,
+            "documentDisplayName": None,
+            "documentDate": None,
+            "objectDescription": f"Work Request {work_request.work_request_number}",
+            "parentObjectDescription": f"Work Request {work_request.work_request_number}",
+            "locationId": root_location_id,
+            "locationName": root_location_id,
+            "clientRootLocationId": root_location_id,
+            "clientRootLocationName": root_location_id,
+        }
         files = {"file": (filename, pdf_bytes, "application/pdf")}
-        form: dict[str, str] = {"objectDisplayName": filename, "setAsPrimary": "false"}
-        if self._user_id:
-            form["userId"] = self._user_id
+        form: dict[str, str] = {
+            "metaData": json.dumps(meta),
+            "objectDisplayName": "Work Request",
+            "setAsPrimary": "false",
+        }
 
         self._request("POST", path, files=files, data=form)
 
