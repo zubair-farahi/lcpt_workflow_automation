@@ -15,7 +15,7 @@ from lcpt_scan_automation.application.checklist_mapper import ChecklistMapper
 from lcpt_scan_automation.application.process_scan import ProcessScanUseCase
 from lcpt_scan_automation.config.settings import Settings
 from lcpt_scan_automation.infrastructure.cp_suite.mock_cp_suite_client import MockCpSuiteClient
-from lcpt_scan_automation.infrastructure.idempotency.local_idempotency_store import LocalIdempotencyStore
+from lcpt_scan_automation.infrastructure.idempotency.memory_idempotency_store import MemoryIdempotencyStore
 from lcpt_scan_automation.infrastructure.ocr.mock_ocr_client import MockOcrClient
 from lcpt_scan_automation.infrastructure.pdf.pypdf_processor import PypdfProcessor
 from lcpt_scan_automation.infrastructure.review_queue.local_review_queue import LocalReviewQueue
@@ -124,8 +124,8 @@ def mock_cp(settings: Settings) -> MockCpSuiteClient:
 
 
 @pytest.fixture
-def idempotency_store(tmp_path: Path) -> LocalIdempotencyStore:
-    return LocalIdempotencyStore(db_path=tmp_path / "idempotency.db")
+def idempotency_store() -> MemoryIdempotencyStore:
+    return MemoryIdempotencyStore()
 
 
 @pytest.fixture
@@ -147,7 +147,7 @@ def build_use_case(
     settings: Settings,
     mock_ocr: MockOcrClient,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
 ) -> ProcessScanUseCase:

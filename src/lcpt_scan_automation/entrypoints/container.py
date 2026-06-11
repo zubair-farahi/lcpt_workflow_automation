@@ -12,7 +12,8 @@ from ..application.handle_ocr_callback import HandleOcrCallbackUseCase
 from ..application.process_scan import ProcessScanUseCase
 from ..config.settings import Settings
 from ..infrastructure.cp_suite.mock_cp_suite_client import MockCpSuiteClient
-from ..infrastructure.idempotency.local_idempotency_store import LocalIdempotencyStore
+from ..infrastructure.idempotency.memory_idempotency_store import MemoryIdempotencyStore
+from ..infrastructure.idempotency.s3_idempotency_store import S3IdempotencyStore
 from ..infrastructure.ocr.haulsafe_client import HaulSafeOcrClient
 from ..infrastructure.ocr.mock_ocr_client import MockOcrClient
 from ..infrastructure.pdf.pypdf_processor import PypdfProcessor
@@ -59,8 +60,12 @@ def build_process_scan_use_case(
         else _build_real_cp_client(settings)
     )
 
-    idempotency_store = LocalIdempotencyStore(
-        db_path=f"{settings.local_storage_dir}/idempotency.db"
+    # Dedup memory: S3 markers in production (durable, shared across
+    # laptop watcher + Lambda); in-memory for local mock runs and tests.
+    idempotency_store = (
+        S3IdempotencyStore(storage=storage, prefix=settings.s3_state_prefix)
+        if use_s3
+        else MemoryIdempotencyStore()
     )
     review_queue = LocalReviewQueue(queue_dir=settings.review_queue_dir)
     checklist_mapper = ChecklistMapper(settings.checklist_mapping_path)

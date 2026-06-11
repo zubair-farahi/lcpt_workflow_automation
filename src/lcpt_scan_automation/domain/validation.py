@@ -11,17 +11,43 @@ from .models import OcrFieldConfidence
 # Default WR number pattern. Override via WR_NUMBER_PATTERN env var.
 DEFAULT_WR_PATTERN: re.Pattern[str] = re.compile(r"^[A-Z]{2,6}-WR-\d+$")
 
-# Values that indicate a checkbox is ticked.
+# Values that indicate a checkbox is ticked / not ticked.
 _CHECKED_VALUES: frozenset[str] = frozenset(
-    {"true", "yes", "checked", "x", "☑", "1"}
+    {"true", "yes", "checked", "x", "☑", "☒", "✓", "✔", "1"}
 )
+_UNCHECKED_VALUES: frozenset[str] = frozenset(
+    {"false", "no", "unchecked", "off", "0", "☐", "[ ]", "[]", "( )", "()"}
+)
+
+# Matches a leading checkbox glyph written as brackets/parens, e.g.
+#   "[x] Receive Credentials"   -> checked
+#   "[ ] Complete"              -> unchecked
+# OCR sometimes returns the whole line text instead of a normalized Yes/No,
+# so we must read the marker off the front of the line.
+_BOX_PREFIX = re.compile(r"^[\[\(]\s*([x✓✔☑☒])?\s*[\]\)]")
 
 
 def normalize_checkbox(value: object) -> bool:
-    """Return True if *value* represents a checked checkbox."""
+    """Return True if *value* represents a checked checkbox.
+
+    Tolerates the three shapes HaulSafe OCR has been observed to return:
+      1. Normalized booleans:  "Yes" / "No" / "True" / "Off"
+      2. Bare markers:         "x", "☑", "1"
+      3. Whole line echoes:    "[X] Receive Credentials" / "[ ] Complete"
+    """
     if value is None:
         return False
-    return str(value).strip().lower() in _CHECKED_VALUES
+    s = str(value).strip().lower()
+    if not s:
+        return False
+    if s in _CHECKED_VALUES:
+        return True
+    if s in _UNCHECKED_VALUES:
+        return False
+    m = _BOX_PREFIX.match(s)
+    if m:
+        return m.group(1) is not None
+    return False
 
 
 def parse_routing(

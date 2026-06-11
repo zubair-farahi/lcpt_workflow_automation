@@ -14,7 +14,7 @@ from lcpt_scan_automation.config.settings import Settings
 from lcpt_scan_automation.domain.enums import ProcessingState, ReviewReasonCode
 from lcpt_scan_automation.domain.models import ScanEvent
 from lcpt_scan_automation.infrastructure.cp_suite.mock_cp_suite_client import MockCpSuiteClient
-from lcpt_scan_automation.infrastructure.idempotency.local_idempotency_store import LocalIdempotencyStore
+from lcpt_scan_automation.infrastructure.idempotency.memory_idempotency_store import MemoryIdempotencyStore
 from lcpt_scan_automation.infrastructure.ocr.mock_ocr_client import MockOcrClient
 from lcpt_scan_automation.infrastructure.review_queue.local_review_queue import LocalReviewQueue
 from lcpt_scan_automation.infrastructure.storage.local_storage import LocalStorage
@@ -53,7 +53,7 @@ _VALID_INFO = {
 def test_valid_scan_reaches_success(
     settings: Settings,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
 ):
@@ -75,7 +75,7 @@ def test_valid_scan_reaches_success(
 def test_both_routes_checked_routes_to_review(
     settings: Settings,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
     tmp_path: Path,
@@ -100,7 +100,7 @@ def test_both_routes_checked_routes_to_review(
 def test_neither_route_checked_routes_to_review(
     settings: Settings,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
     tmp_path: Path,
@@ -121,7 +121,7 @@ def test_neither_route_checked_routes_to_review(
 
 def test_missing_work_request_routes_to_review(
     settings: Settings,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
     tmp_path: Path,
@@ -144,7 +144,7 @@ def test_missing_work_request_routes_to_review(
 def test_company_mismatch_routes_to_review(
     settings: Settings,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
     tmp_path: Path,
@@ -183,7 +183,7 @@ def test_company_mismatch_routes_to_review(
 def test_low_ocr_confidence_routes_to_review(
     settings: Settings,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
     tmp_path: Path,
@@ -222,7 +222,7 @@ def test_low_ocr_confidence_routes_to_review(
 def test_single_page_pdf_routes_to_review(
     settings: Settings,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
     tmp_path: Path,
@@ -243,7 +243,7 @@ def test_single_page_pdf_routes_to_review(
 def test_duplicate_scan_is_skipped(
     settings: Settings,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
 ):
@@ -267,7 +267,7 @@ def test_duplicate_scan_is_skipped(
 def test_checklist_item_marked_complete_for_known_mapping(
     settings: Settings,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
 ):
@@ -286,7 +286,7 @@ def test_checklist_item_marked_complete_for_known_mapping(
 
 def test_missing_checklist_item_policy_review(
     settings: Settings,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
     tmp_path: Path,
@@ -312,7 +312,7 @@ def test_missing_checklist_item_policy_review(
 
 def test_missing_checklist_item_policy_skip(
     settings: Settings,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
 ):
@@ -336,7 +336,7 @@ def test_missing_checklist_item_policy_skip(
 def test_audit_note_created_on_success(
     settings: Settings,
     mock_cp: MockCpSuiteClient,
-    idempotency_store: LocalIdempotencyStore,
+    idempotency_store: MemoryIdempotencyStore,
     review_queue: LocalReviewQueue,
     local_storage: LocalStorage,
 ):

@@ -116,3 +116,34 @@ class TestValidateCompanyPrefix:
     def test_case_insensitive_match(self):
         result = validate_company_prefix("pacific first group", "PFG-WR-351", self._MAPPING, True)
         assert result is None
+
+
+# ── normalize_checkbox: OCR output-shape variants (regression 2026-06-10) ──
+# HaulSafe sometimes echoes the full line instead of a normalized Yes/No.
+import pytest
+
+from lcpt_scan_automation.domain.validation import normalize_checkbox
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        # Shape 1: normalized booleans
+        ("Yes", True), ("No", False), ("True", True), ("Off", False),
+        # Shape 2: bare markers
+        ("x", True), ("X", True), ("☑", True), ("1", True), ("0", False),
+        # Shape 3: whole-line echoes (the 2026-06-10 incident)
+        ("[X] Attach documents to Internal Attachments", True),
+        ("[x] Receive Credentials", True),
+        ("[ ] Attach documents to Attachments", False),
+        ("[ ] Complete", False),
+        ("[] Process Through State Agency", False),
+        ("(X) Internal", True),
+        ("( ) External", False),
+        # Edge cases
+        (None, False), ("", False), ("   ", False),
+        ("some random text", False),
+    ],
+)
+def test_normalize_checkbox_tolerates_ocr_variants(value, expected):
+    assert normalize_checkbox(value) is expected

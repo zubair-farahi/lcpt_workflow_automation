@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     # (empty = server default, which lands in the PUBLIC tab)
     cp_suite_note_tab_type_id: str = ""
 
+    # S3 prefix where processed-scan state markers are written (replaces
+    # the old local SQLite idempotency DB)
+    s3_state_prefix: str = "state/"
+
     lcpt_skip_users: str = ""        # Comma-separated reps to skip
     lcpt_include_users: str = ""     # Comma-separated reps to process (empty = all)
 
