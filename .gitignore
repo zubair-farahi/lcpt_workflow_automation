@@ -138,3 +138,10 @@ logs/
 scratch/
 tmp/
 *.tmp
+
+# ── Terraform ───────────────────────────────────────────────────────────
+infra/.terraform/
+infra/terraform.tfvars
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl

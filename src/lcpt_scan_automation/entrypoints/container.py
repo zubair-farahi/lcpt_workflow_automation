@@ -18,6 +18,7 @@ from ..infrastructure.ocr.haulsafe_client import HaulSafeOcrClient
 from ..infrastructure.ocr.mock_ocr_client import MockOcrClient
 from ..infrastructure.pdf.pypdf_processor import PypdfProcessor
 from ..infrastructure.review_queue.local_review_queue import LocalReviewQueue
+from ..infrastructure.review_queue.s3_review_queue import S3ReviewQueue
 from ..infrastructure.storage.local_storage import LocalStorage
 from ..infrastructure.storage.s3_storage import S3Storage
 
@@ -67,7 +68,13 @@ def build_process_scan_use_case(
         if use_s3
         else MemoryIdempotencyStore()
     )
-    review_queue = LocalReviewQueue(queue_dir=settings.review_queue_dir)
+    # Review queue: durable S3 JSON in S3 mode (Lambda-safe); local files
+    # otherwise. The SharePoint adapter will slot in behind the same port.
+    review_queue = (
+        S3ReviewQueue(storage=storage, prefix=settings.s3_review_queue_prefix)
+        if use_s3
+        else LocalReviewQueue(queue_dir=settings.review_queue_dir)
+    )
     checklist_mapper = ChecklistMapper(settings.checklist_mapping_path)
     audit_note_builder = AuditNoteBuilder()
 

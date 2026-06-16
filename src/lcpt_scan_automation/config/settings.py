@@ -80,6 +80,8 @@ class Settings(BaseSettings):
     # S3 prefix where processed-scan state markers are written (replaces
     # the old local SQLite idempotency DB)
     s3_state_prefix: str = "state/"
+    # S3 prefix for review-queue items (used when storage is S3)
+    s3_review_queue_prefix: str = "review_queue/"
 
     lcpt_skip_users: str = ""        # Comma-separated reps to skip
     lcpt_include_users: str = ""     # Comma-separated reps to process (empty = all)
