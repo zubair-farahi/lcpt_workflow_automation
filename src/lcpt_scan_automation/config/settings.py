@@ -66,6 +66,20 @@ class Settings(BaseSettings):
 
     # ── Review queue ──────────────────────────────────────────────────────────
     review_queue_dir: str = "./review_queue"
+    # Backend selection: "local" (dev, JSON files), "s3" (Lambda, JSON in S3),
+    # or "sharepoint" (PDFs + metadata columns in SharePoint).
+    review_queue_backend: str = "local"
+
+    # ── SharePoint (review queue backend) ─────────────────────────────────────
+    # App-only Graph creds (from IT). The app must have Sites.Selected
+    # permission AND a site-level grant on the LCPT Scan Review site --
+    # see docs/sharepoint-review-queue-setup.md.
+    graph_tenant_id: str = ""
+    graph_client_id: str = ""
+    graph_client_secret: str = ""
+    sharepoint_site_id: str = ""
+    sharepoint_drive_id: str = ""
+    sharepoint_timeout_seconds: float = 60.0
 
     # ── Processing policies ───────────────────────────────────────────────────
     missing_checklist_item_policy: str = "review"
