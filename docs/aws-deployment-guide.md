@@ -1,5 +1,18 @@
 # AWS Deployment Guide — LCPT Scan Automation
 
+> **Infrastructure has moved.** The canonical Terraform for this Lambda
+> workload lives in the IaC repo:
+>
+> - Repo: `bestpass/iac-fw-cpsuite-dev`
+> - Path: `services/lcpt_scan_automation_*.tf`
+> - Terraform Cloud workspace: `dw1-cpsuitedev-services`
+>
+> Deployments happen through the Terraform Cloud pipeline, not from a
+> developer's laptop. The `infra/` folder in this repo is kept for
+> historical reference but is **no longer the source of truth**.
+> If you're updating infrastructure, do it in the IaC repo on branch
+> `AIP-445-lcpt-scan-automation-infra` (or its successor on `main`).
+
 Architecture: **S3 (existing bucket) -> [optional SQS] -> Lambda (container
 image from ECR)**, provisioned with Terraform. No secrets in code, image,
 or Terraform state — runtime secrets live in AWS Secrets Manager.

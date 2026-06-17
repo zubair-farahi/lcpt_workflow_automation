@@ -2,17 +2,16 @@
   "requestId": "6a0b4f76e2ecd2e7dbbc11ef",
   "status": "COMPLETED",
   "extractedInfo": {
-    "companyName": "Pacific First Group",
-    "workRequestNumber": "PFG-WR-351",
-    "routingInternal": "",
-    "routingExternal": "",
+    "workRequestNumber": "PFG-WR-353",
+    "attachDocumentsToInternalAttachments": "",
+    "attachDocumentsToAttachments": "",
     "processThroughStateAgency": "x",
     "receiveCredentials": "",
-    "complete": "",
+    "sendCredentials": "",
     "additionalNotes": "",
     "completedBy": "Jane Smith",
-    "date": "2024-01-15"
+    "date": "2024-01-17"
   },
-  "createdAt": "2026-01-15T10:00:00.000Z",
-  "updatedAt": "2026-01-15T10:00:15.000Z"
+  "createdAt": "2026-01-17T10:00:00.000Z",
+  "updatedAt": "2026-01-17T10:00:15.000Z"
 }

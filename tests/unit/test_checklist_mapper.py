@@ -43,19 +43,19 @@ class TestChecklistMapper:
 
     def test_second_task_type_mapping(self, mapping_yaml: Path):
         mapper = ChecklistMapper(mapping_yaml)
-        result = mapper.get_checklist_item_name("TYPE_B", CoverSheetAction.COMPLETE)
+        result = mapper.get_checklist_item_name("TYPE_B", CoverSheetAction.SEND_CREDENTIALS)
         assert result == "Mark complete"
 
     def test_unknown_task_type_returns_none(self, mapping_yaml: Path):
         mapper = ChecklistMapper(mapping_yaml)
-        result = mapper.get_checklist_item_name("UNKNOWN_TYPE", CoverSheetAction.COMPLETE)
+        result = mapper.get_checklist_item_name("UNKNOWN_TYPE", CoverSheetAction.SEND_CREDENTIALS)
         assert result is None
 
     def test_unknown_action_for_known_type_returns_none(self, mapping_yaml: Path):
         mapper = ChecklistMapper(mapping_yaml)
-        result = mapper.get_checklist_item_name("TYPE_A", CoverSheetAction.COMPLETE)
+        result = mapper.get_checklist_item_name("TYPE_A", CoverSheetAction.SEND_CREDENTIALS)
         assert result is None  # TYPE_A has no COMPLETE mapping in this fixture
 
     def test_missing_file_does_not_raise(self, tmp_path: Path):
         mapper = ChecklistMapper(tmp_path / "nonexistent.yaml")
-        assert mapper.get_checklist_item_name("TYPE_A", CoverSheetAction.COMPLETE) is None
+        assert mapper.get_checklist_item_name("TYPE_A", CoverSheetAction.SEND_CREDENTIALS) is None

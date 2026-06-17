@@ -1,4 +1,24 @@
-"""Maps HaulSafe OCR extractedInfo dict → CoverSheet domain model."""
+"""Maps HaulSafe OCR extractedInfo dict -> CoverSheet domain model.
+
+Field name mapping (HaulSafe -> domain):
+    workRequestNumber                       -> work_request_number
+    attachDocumentsToInternalAttachments    \
+    attachDocumentsToAttachments            /  -> routing  (via parse_routing)
+    processThroughStateAgency               -> CoverSheetAction.PROCESS_THROUGH_STATE_AGENCY
+    receiveCredentials                      -> CoverSheetAction.RECEIVE_CREDENTIALS
+    sendCredentials                         -> CoverSheetAction.SEND_CREDENTIALS
+    additionalNotes                         -> additional_notes
+    completedBy                             -> completed_by
+    date                                    -> scan_date
+
+NOTE: The two 'attach' checkboxes ALSO appear as checklist items on the
+cover sheet, but we model them as routing-only -- they decide where the
+PDF goes (internal vs external attachment endpoint) and never appear in
+checked_actions. See domain.enums.CoverSheetAction docstring.
+
+The legacy field names (companyName, routingInternal/External, complete)
+were removed when the cover sheet was redesigned in 2026.
+"""
 
 from __future__ import annotations
 
@@ -10,27 +30,18 @@ from ..domain.models import CoverSheet
 from ..domain.validation import normalize_checkbox, parse_routing
 
 
-def parse_ocr_extracted_info(extracted_info: dict[str, Any]) -> tuple[CoverSheet, Optional[ReviewReasonCode]]:
+def parse_ocr_extracted_info(
+    extracted_info: dict[str, Any],
+) -> tuple[CoverSheet, Optional[ReviewReasonCode]]:
     """Parse the flat extractedInfo dict returned by HaulSafe OCR.
 
     Returns (cover_sheet, review_reason).
-    review_reason is non-None when routing is ambiguous — the caller should
-    route to review immediately.
-
-    Field name mapping (HaulSafe → domain):
-        companyName                 → company_name
-        workRequestNumber           → work_request_number
-        routingInternal / External  → routing (via parse_routing)
-        processThroughStateAgency   → CoverSheetAction.PROCESS_THROUGH_STATE_AGENCY
-        receiveCredentials          → CoverSheetAction.RECEIVE_CREDENTIALS
-        complete                    → CoverSheetAction.COMPLETE
-        additionalNotes             → additional_notes
-        completedBy                 → completed_by
-        date                        → date
+    review_reason is non-None when routing is ambiguous -- the caller
+    should route to review immediately.
     """
     routing_value, routing_reason = parse_routing(
-        extracted_info.get("routingInternal"),
-        extracted_info.get("routingExternal"),
+        extracted_info.get("attachDocumentsToInternalAttachments"),
+        extracted_info.get("attachDocumentsToAttachments"),
     )
 
     checked_actions: list[CoverSheetAction] = []
@@ -38,15 +49,14 @@ def parse_ocr_extracted_info(extracted_info: dict[str, Any]) -> tuple[CoverSheet
         checked_actions.append(CoverSheetAction.PROCESS_THROUGH_STATE_AGENCY)
     if normalize_checkbox(extracted_info.get("receiveCredentials")):
         checked_actions.append(CoverSheetAction.RECEIVE_CREDENTIALS)
-    if normalize_checkbox(extracted_info.get("complete")):
-        checked_actions.append(CoverSheetAction.COMPLETE)
+    if normalize_checkbox(extracted_info.get("sendCredentials")):
+        checked_actions.append(CoverSheetAction.SEND_CREDENTIALS)
 
     parsed_date: Optional[date] = _parse_date(extracted_info.get("date"))
 
     from ..domain.enums import RoutingType
 
     cover_sheet = CoverSheet(
-        company_name=_nonempty(extracted_info.get("companyName")),
         work_request_number=_nonempty(extracted_info.get("workRequestNumber")),
         routing=RoutingType(routing_value) if routing_value else None,
         checked_actions=checked_actions,

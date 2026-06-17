@@ -277,36 +277,20 @@ class ProcessScanUseCase:
         import re
 
         from ..domain.validation import (
-            validate_company_name,
-            validate_company_prefix,
             validate_confidence,
             validate_wr_number,
         )
-
-        reason = validate_company_name(cover_sheet.company_name)
-        if reason:
-            return reason
 
         pattern = re.compile(self._settings.wr_number_pattern)
         reason = validate_wr_number(cover_sheet.work_request_number, pattern)
         if reason:
             return reason
 
-        reason = validate_confidence(
+        return validate_confidence(
             cover_sheet.field_confidences,
-            required_fields=["companyName", "workRequestNumber"],
+            required_fields=["workRequestNumber"],
             threshold=self._settings.ocr_confidence_threshold,
             require_confidence=self._settings.require_ocr_confidence,
-        )
-        if reason:
-            return reason
-
-        prefix_mapping = self._settings.load_company_prefix_mapping()
-        return validate_company_prefix(
-            cover_sheet.company_name or "",
-            cover_sheet.work_request_number or "",
-            prefix_mapping,
-            self._settings.company_prefix_validation_required,
         )
 
     def _process_cp_suite(

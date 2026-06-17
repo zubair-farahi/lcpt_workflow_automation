@@ -1,4 +1,4 @@
-"""Pure validation functions — no I/O, no external dependencies."""
+"""Pure validation functions -- no I/O, no external dependencies."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ _UNCHECKED_VALUES: frozenset[str] = frozenset(
 
 # Matches a leading checkbox glyph written as brackets/parens, e.g.
 #   "[x] Receive Credentials"   -> checked
-#   "[ ] Complete"              -> unchecked
+#   "[ ] Send Credentials"      -> unchecked
 # OCR sometimes returns the whole line text instead of a normalized Yes/No,
 # so we must read the marker off the front of the line.
 _BOX_PREFIX = re.compile(r"^[\[\(]\s*([x✓✔☑☒])?\s*[\]\)]")
@@ -33,7 +33,7 @@ def normalize_checkbox(value: object) -> bool:
     Tolerates the three shapes HaulSafe OCR has been observed to return:
       1. Normalized booleans:  "Yes" / "No" / "True" / "Off"
       2. Bare markers:         "x", "☑", "1"
-      3. Whole line echoes:    "[X] Receive Credentials" / "[ ] Complete"
+      3. Whole line echoes:    "[X] Receive Credentials" / "[ ] Send Credentials"
     """
     if value is None:
         return False
@@ -54,9 +54,12 @@ def parse_routing(
     internal_raw: Optional[str],
     external_raw: Optional[str],
 ) -> tuple[Optional[str], Optional[ReviewReasonCode]]:
-    """Resolve routing from the two raw checkbox values.
+    """Resolve routing from the two 'attach' checkbox values on the cover sheet.
 
-    Returns (routing_value, reason_code).  reason_code is non-None only when
+    Internal = "Attach documents to Internal Attachments" checked
+    External = "Attach documents to Attachments" checked
+
+    Returns (routing_value, reason_code). reason_code is non-None only when
     routing cannot be unambiguously determined.
     """
     internal = normalize_checkbox(internal_raw)
@@ -83,12 +86,6 @@ def validate_wr_number(
     return None
 
 
-def validate_company_name(company_name: Optional[str]) -> Optional[ReviewReasonCode]:
-    if not company_name or not company_name.strip():
-        return ReviewReasonCode.MISSING_REQUIRED_FIELD
-    return None
-
-
 def validate_confidence(
     field_confidences: list[OcrFieldConfidence],
     required_fields: list[str],
@@ -107,24 +104,4 @@ def validate_confidence(
         conf = confidence_map.get(field)
         if conf is not None and conf < threshold:
             return ReviewReasonCode.LOW_OCR_CONFIDENCE
-    return None
-
-
-def validate_company_prefix(
-    company_name: str,
-    wr_number: str,
-    prefix_mapping: dict[str, list[str]],
-    validation_required: bool,
-) -> Optional[ReviewReasonCode]:
-    """Check that company_name is consistent with the WR number prefix.
-
-    Returns None when validation is disabled or when the mapping has no entry
-    for this prefix (non-blocking by design — see company_prefix_validation_required).
-    """
-    if not validation_required or not prefix_mapping:
-        return None
-    prefix = wr_number.split("-WR-")[0] if "-WR-" in wr_number else ""
-    expected = prefix_mapping.get(prefix, [])
-    if expected and company_name.strip().lower() not in {c.lower() for c in expected}:
-        return ReviewReasonCode.COMPANY_MISMATCH
     return None

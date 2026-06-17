@@ -106,7 +106,7 @@ class TestLambdaHandlerDelegation:
         payload = json.dumps({
             "requestId": "req-abc",
             "status": "COMPLETED",
-            "extractedInfo": {"companyName": "Test Co"},
+            "extractedInfo": {"workRequestNumber": "PFG-WR-351"},
         })
 
         with patch(

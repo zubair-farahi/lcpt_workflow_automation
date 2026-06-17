@@ -18,9 +18,17 @@ class RoutingType(StrEnum):
 
 
 class CoverSheetAction(StrEnum):
+    """Checklist actions printed on the cover sheet.
+
+    The two 'Attach documents to ...' items also appear on the cover sheet
+    but are intentionally NOT modelled here -- they're consumed by the parser
+    to derive the routing (INTERNAL vs EXTERNAL) and never appear in
+    checked_actions. See ocr_result_parser.parse_ocr_extracted_info.
+    """
+
     PROCESS_THROUGH_STATE_AGENCY = "PROCESS_THROUGH_STATE_AGENCY"
     RECEIVE_CREDENTIALS = "RECEIVE_CREDENTIALS"
-    COMPLETE = "COMPLETE"
+    SEND_CREDENTIALS = "SEND_CREDENTIALS"
 
 
 class OcrStatus(StrEnum):
@@ -35,7 +43,6 @@ class ReviewReasonCode(StrEnum):
     NEITHER_ROUTE_CHECKED = "NEITHER_ROUTE_CHECKED"
     MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD"
     INVALID_WR_NUMBER_FORMAT = "INVALID_WR_NUMBER_FORMAT"
-    COMPANY_MISMATCH = "COMPANY_MISMATCH"
     LOW_OCR_CONFIDENCE = "LOW_OCR_CONFIDENCE"
     OCR_FAILED = "OCR_FAILED"
     OCR_FAILED_OR_UNKNOWN_STATUS = "OCR_FAILED_OR_UNKNOWN_STATUS"

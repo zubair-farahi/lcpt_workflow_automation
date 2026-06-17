@@ -130,13 +130,12 @@ def test_s3_pdf_is_downloaded_before_splitting(
 
     ocr = MockOcrClient(
         extracted_info={
-            "companyName": "Pacific First Group",
             "workRequestNumber": "PFG-WR-351",
-            "routingInternal": "x",
-            "routingExternal": "",
+            "attachDocumentsToInternalAttachments": "x",
+            "attachDocumentsToAttachments": "",
             "processThroughStateAgency": "x",
             "receiveCredentials": "",
-            "complete": "",
+            "sendCredentials": "",
             "additionalNotes": "",
             "completedBy": "Jane",
             "date": "2024-01-15",
@@ -198,13 +197,12 @@ def test_cover_sheet_uploaded_to_s3_before_ocr(
 
     ocr = CapturingOcrClient(
         extracted_info={
-            "companyName": "Pacific First Group",
             "workRequestNumber": "PFG-WR-351",
-            "routingInternal": "x",
-            "routingExternal": "",
+            "attachDocumentsToInternalAttachments": "x",
+            "attachDocumentsToAttachments": "",
             "processThroughStateAgency": "x",
             "receiveCredentials": "",
-            "complete": "",
+            "sendCredentials": "",
             "additionalNotes": "",
             "completedBy": "Jane",
             "date": "2024-01-15",
@@ -259,13 +257,12 @@ def test_presigned_url_passed_to_ocr(
 
     ocr = UrlCapturingOcr(
         extracted_info={
-            "companyName": "Pacific First Group",
             "workRequestNumber": "PFG-WR-351",
-            "routingInternal": "x",
-            "routingExternal": "",
+            "attachDocumentsToInternalAttachments": "x",
+            "attachDocumentsToAttachments": "",
             "processThroughStateAgency": "x",
             "receiveCredentials": "",
-            "complete": "",
+            "sendCredentials": "",
             "additionalNotes": "",
             "completedBy": "Jane",
             "date": "2024-01-15",
@@ -356,13 +353,12 @@ def test_local_storage_flow_without_aws_credentials(
 
     ocr = MockOcrClient(
         extracted_info={
-            "companyName": "Pacific First Group",
             "workRequestNumber": "PFG-WR-351",
-            "routingInternal": "x",
-            "routingExternal": "",
+            "attachDocumentsToInternalAttachments": "x",
+            "attachDocumentsToAttachments": "",
             "processThroughStateAgency": "x",
             "receiveCredentials": "",
-            "complete": "",
+            "sendCredentials": "",
             "additionalNotes": "",
             "completedBy": "Jane",
             "date": "2024-01-15",

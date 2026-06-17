@@ -18,7 +18,6 @@ def _make_record() -> ScanRecord:
 
 def _make_cover_sheet() -> CoverSheet:
     return CoverSheet(
-        company_name="Pacific First Group",
         work_request_number="PFG-WR-351",
         routing=RoutingType.INTERNAL,
         checked_actions=[CoverSheetAction.PROCESS_THROUGH_STATE_AGENCY],

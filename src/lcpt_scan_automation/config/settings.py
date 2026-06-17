@@ -83,7 +83,6 @@ class Settings(BaseSettings):
 
     # ── Processing policies ───────────────────────────────────────────────────
     missing_checklist_item_policy: str = "review"
-    company_prefix_validation_required: bool = False
     wr_number_pattern: str = r"^[A-Z]{2,6}-WR-\d+$"
 
     # ── User filtering for S3 watcher ─────────────────────────────────────
@@ -102,7 +101,6 @@ class Settings(BaseSettings):
 
     # ── Config file paths ─────────────────────────────────────────────────────
     checklist_mapping_path: str = "./config/checklist_mapping.yaml"
-    company_prefix_mapping_path: str = "./config/company_prefix_mapping.yaml"
     haul_ocr_fields_path: str = "./config/haul_ocr_fields.yaml"
 
     # ── Logging ───────────────────────────────────────────────────────────────
@@ -118,13 +116,6 @@ class Settings(BaseSettings):
             OcrField(field_name=f["fieldName"], field_type=f["fieldType"])
             for f in data.get("fields", [])
         ]
-
-    def load_company_prefix_mapping(self) -> dict[str, list[str]]:
-        path = Path(self.company_prefix_mapping_path)
-        if not path.exists():
-            return {}
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        return data.get("prefix_to_companies", {})
 
     def build_s3_client(self):
         """Build a boto3 S3 client using configured credentials."""

@@ -1,25 +1,38 @@
-# HaulSafe OCR field definitions for the LCPT cover sheet
+# HaulSafe OCR field definitions for the LCPT cover sheet (2026 layout).
 #
-# fieldName — the name sent to and returned by HaulSafe OCR
-# fieldType — TEXT or DATE (confirm supported values with HaulSafe if needed)
+# fieldName — the name sent to HaulSafe OCR. HaulSafe Vision AI uses these
+# as semantic hints to locate values on the page, so they MUST match the
+# labels printed on the cover sheet as closely as possible.
 #
-# TODO: confirm that HaulSafe can reliably detect checkboxes from scanned PDFs
-# TODO: confirm whether fieldName casing must match exactly (API may be case-sensitive)
+# fieldType — TEXT for text/checkbox values, DATE for dates.
+#
+# Cover sheet layout (each line is one row on the page):
+#   Work Request Number: <text>
+#   Checklist:
+#     [ ] Attach documents to Internal Attachments  -> attachDocumentsToInternalAttachments
+#     [ ] Attach documents to Attachments          -> attachDocumentsToAttachments
+#     [ ] Process Through State Agency             -> processThroughStateAgency
+#     [ ] Receive Credentials                      -> receiveCredentials
+#     [ ] Send Credentials                         -> sendCredentials
+#   Additional Notes: <text>
+#   Completed By: <text>
+#   Date: <text>
+#
+# NOTE: There is NO Company Name field on the cover sheet. Do not add one
+# back without updating the cover sheet template first.
 
 fields:
-  - fieldName: companyName
-    fieldType: TEXT
   - fieldName: workRequestNumber
     fieldType: TEXT
-  - fieldName: routingInternal
+  - fieldName: attachDocumentsToInternalAttachments
     fieldType: TEXT
-  - fieldName: routingExternal
+  - fieldName: attachDocumentsToAttachments
     fieldType: TEXT
   - fieldName: processThroughStateAgency
     fieldType: TEXT
   - fieldName: receiveCredentials
     fieldType: TEXT
-  - fieldName: complete
+  - fieldName: sendCredentials
     fieldType: TEXT
   - fieldName: additionalNotes
     fieldType: TEXT

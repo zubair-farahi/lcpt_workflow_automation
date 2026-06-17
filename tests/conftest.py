@@ -61,8 +61,8 @@ def tmp_mapping_yaml(tmp_path: Path) -> Path:
             },
             {
                 "task_type": "TYPE_A",
-                "action": "COMPLETE",
-                "checklist_item_name": "Complete",
+                "action": "SEND_CREDENTIALS",
+                "checklist_item_name": "Send credentials",
             },
         ]
     }
@@ -75,13 +75,12 @@ def tmp_mapping_yaml(tmp_path: Path) -> Path:
 def tmp_fields_yaml(tmp_path: Path) -> Path:
     fields = {
         "fields": [
-            {"fieldName": "companyName", "fieldType": "TEXT"},
             {"fieldName": "workRequestNumber", "fieldType": "TEXT"},
-            {"fieldName": "routingInternal", "fieldType": "TEXT"},
-            {"fieldName": "routingExternal", "fieldType": "TEXT"},
+            {"fieldName": "attachDocumentsToInternalAttachments", "fieldType": "TEXT"},
+            {"fieldName": "attachDocumentsToAttachments", "fieldType": "TEXT"},
             {"fieldName": "processThroughStateAgency", "fieldType": "TEXT"},
             {"fieldName": "receiveCredentials", "fieldType": "TEXT"},
-            {"fieldName": "complete", "fieldType": "TEXT"},
+            {"fieldName": "sendCredentials", "fieldType": "TEXT"},
             {"fieldName": "additionalNotes", "fieldType": "TEXT"},
             {"fieldName": "completedBy", "fieldType": "TEXT"},
             {"fieldName": "date", "fieldType": "DATE"},
@@ -103,10 +102,8 @@ def settings(tmp_path: Path, tmp_mapping_yaml: Path, tmp_fields_yaml: Path) -> S
         haul_ocr_poll_interval_seconds=0.0,
         haul_ocr_max_attempts=3,
         missing_checklist_item_policy="review",
-        company_prefix_validation_required=False,
         checklist_mapping_path=str(tmp_mapping_yaml),
         haul_ocr_fields_path=str(tmp_fields_yaml),
-        company_prefix_mapping_path=str(tmp_path / "company_prefix_mapping.yaml"),
     )
 
 
@@ -119,7 +116,7 @@ def mock_cp(settings: Settings) -> MockCpSuiteClient:
     task = client.add_task(wr.work_request_id, "TYPE_A", name="State Agency Task")
     client.add_checklist_item(task.task_id, "Process through state agency")
     client.add_checklist_item(task.task_id, "Receive credentials")
-    client.add_checklist_item(task.task_id, "Complete")
+    client.add_checklist_item(task.task_id, "Send credentials")
     return client
 
 
@@ -168,13 +165,12 @@ def build_use_case(
 def valid_ocr_client() -> MockOcrClient:
     return MockOcrClient(
         extracted_info={
-            "companyName": "Pacific First Group",
             "workRequestNumber": "PFG-WR-351",
-            "routingInternal": "x",
-            "routingExternal": "",
+            "attachDocumentsToInternalAttachments": "x",
+            "attachDocumentsToAttachments": "",
             "processThroughStateAgency": "x",
             "receiveCredentials": "",
-            "complete": "",
+            "sendCredentials": "",
             "additionalNotes": "",
             "completedBy": "Jane Smith",
             "date": "2024-01-15",

@@ -12,7 +12,6 @@ class OcrField(BaseModel):
     """A single field definition sent to the OCR service."""
 
     field_name: str
-    # TODO: confirm supported fieldType values with HaulSafe (TEXT, DATE confirmed; others unknown)
     field_type: str  # e.g. "TEXT" | "DATE"
 
 
@@ -22,9 +21,13 @@ class OcrFieldConfidence(BaseModel):
 
 
 class CoverSheet(BaseModel):
-    """Typed domain model for the LCPT scan cover sheet after OCR extraction."""
+    """Typed domain model for the LCPT scan cover sheet after OCR extraction.
 
-    company_name: Optional[str] = None
+    The current LCPT cover sheet has NO Company Name field -- it was removed
+    in the 2026 redesign. Do not re-introduce company_name without updating
+    the cover sheet template first.
+    """
+
     work_request_number: Optional[str] = None
     routing: Optional[RoutingType] = None
     checked_actions: list[CoverSheetAction] = Field(default_factory=list)
@@ -51,7 +54,7 @@ class OcrResult(BaseModel):
 
 
 class ScanRecord(BaseModel):
-    """Persisted state for one scan — drives idempotency and audit trail."""
+    """Persisted state for one scan -- drives idempotency and audit trail."""
 
     scan_id: str
     source_path: str
@@ -141,7 +144,7 @@ class ObjectMetadata(BaseModel):
 
 
 class ScanEvent(BaseModel):
-    """Trigger event — either a local file path or an S3 object key."""
+    """Trigger event -- either a local file path or an S3 object key."""
 
     source_path: str
     etag: Optional[str] = None
