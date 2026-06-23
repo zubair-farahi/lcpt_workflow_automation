@@ -1,16 +1,7 @@
-"""Local CLI for LCPT Scan Automation.
-
-Two production-shaped runtime modes are supported:
-
-    Mode 3:  Real S3 + real HaulSafe OCR + mocked CP Suite
-             (use while waiting on CP Suite staging credentials)
-                lcpt-scan process-s3 --key incoming/scan.pdf --mock-cp
-
-    Mode 4:  Real S3 + real HaulSafe OCR + real CP Suite (full end-to-end)
-                lcpt-scan process-s3 --key incoming/scan.pdf
+"""CLI for LCPT Scan Automation.
 
 Commands:
-    process-s3       — full pipeline from an S3 object (Mode 3 or 4)
+    process-s3       — full production pipeline from an S3 object
     list-s3          — list objects in the S3 bucket (optionally filter by prefix)
     check-s3-access  — diagnose S3 bucket access and IAM permissions
     submit-ocr       — submit a document URL to the real HaulSafe OCR API
@@ -21,8 +12,7 @@ Commands:
     callback         — feed a saved OCR JSON payload into the pipeline (debug only)
 
 Examples:
-    lcpt-scan process-s3 --key incoming/scan.pdf --mock-cp     # Mode 3
-    lcpt-scan process-s3 --key incoming/scan.pdf               # Mode 4
+    lcpt-scan process-s3 --key incoming/scan.pdf
     lcpt-scan list-s3 --prefix incoming/
     lcpt-scan check-s3-access
     lcpt-scan test-ocr --document-url "https://..."
@@ -39,7 +29,9 @@ from typing import Annotated, Optional
 
 import typer
 
-app = typer.Typer(help="LCPT Scan Automation — local development CLI")
+app = typer.Typer(help="LCPT Scan Automation CLI")
+
+OCR_API_KEY_MISSING_MESSAGE = "Error: HAUL_OCR_API_KEY is not set."
 
 
 def _get_settings():
@@ -56,19 +48,8 @@ def _get_settings():
 def process_s3(
     bucket: Annotated[str, typer.Option(help="S3 bucket name")] = "fw-ocr-project",
     key: Annotated[str, typer.Option(help="S3 object key (e.g. incoming/scan.pdf)")] = ...,
-    mock_cp: Annotated[
-        bool,
-        typer.Option(
-            "--mock-cp/--real-cp",
-            help="Use mock CP Suite client (Mode 3). Disable for Mode 4 (full end-to-end).",
-        ),
-    ] = True,
 ) -> None:
-    """Process a scan from S3 end-to-end (Mode 3 or Mode 4).
-
-    Real S3 + real HaulSafe OCR are always used.
-    CP Suite is mocked by default (Mode 3); pass --real-cp for Mode 4.
-    """
+    """Process a scan from S3 end-to-end with production adapters."""
     from ..domain.models import ScanEvent
     from ..infrastructure.storage.s3_storage import S3Storage
     from .container import build_process_scan_use_case
@@ -83,8 +64,7 @@ def process_s3(
         aws_secret_access_key=settings.aws_secret_access_key or None,
     )
 
-    mode_label = "Mode 3 (real S3 + real OCR + mocked CP)" if mock_cp else "Mode 4 (full end-to-end)"
-    typer.echo(f"Mode: {mode_label}")
+    typer.echo("Mode: production end-to-end")
     typer.echo(f"Fetching metadata: s3://{bucket}/{key} ...")
     try:
         metadata = s3.get_object_metadata(key)
@@ -95,15 +75,18 @@ def process_s3(
     typer.echo(f"  ETag: {metadata.etag}  Size: {metadata.size} bytes")
 
     event = ScanEvent(source_path=key, etag=metadata.etag)
-    settings_s3 = settings.model_copy(update={"lcpt_scan_bucket": bucket})
+    # The s3-ocr IAM user only has PutObject/DeleteObject on test-uploads/.
+    # Override the processing prefix so the temp cover PNG is written there.
+    # In Lambda/production, the IAM role has access to processing/ normally.
+    settings_s3 = settings.model_copy(update={
+        "lcpt_scan_bucket": bucket,
+        "lcpt_scan_processing_prefix": "test-uploads/",
+    })
     use_case = build_process_scan_use_case(
         settings_s3,
-        use_mock_cp=mock_cp,
-        use_s3=True,
         s3_client=s3._client,
     )
     typer.echo(f"Running pipeline for s3://{bucket}/{key} ...")
-
     try:
         record = use_case.execute(event)
     except Exception as exc:
@@ -245,7 +228,7 @@ def callback(
         extracted_info=extracted_info,
     )
 
-    use_case = build_handle_ocr_callback_use_case(settings, use_mock_cp=True)
+    use_case = build_handle_ocr_callback_use_case(settings)
     try:
         record = use_case.execute(ocr_result)
     except ValueError as exc:
@@ -342,7 +325,7 @@ def submit_ocr(
     from ..infrastructure.ocr.haulsafe_client import HaulSafeOcrClient
 
     if not settings.haul_ocr_api_key:
-        typer.echo("Error: HAUL_OCR_API_KEY is not set.", err=True)
+        typer.echo(OCR_API_KEY_MISSING_MESSAGE, err=True)
         raise typer.Exit(1)
 
     client = HaulSafeOcrClient(
@@ -374,7 +357,7 @@ def get_ocr_result(
     from ..infrastructure.ocr.haulsafe_client import HaulSafeOcrClient
 
     if not settings.haul_ocr_api_key:
-        typer.echo("Error: HAUL_OCR_API_KEY is not set.", err=True)
+        typer.echo(OCR_API_KEY_MISSING_MESSAGE, err=True)
         raise typer.Exit(1)
 
     client = HaulSafeOcrClient(
@@ -409,7 +392,7 @@ def test_ocr(
     from ..infrastructure.ocr.haulsafe_client import HaulSafeOcrClient
 
     if not settings.haul_ocr_api_key:
-        typer.echo("Error: HAUL_OCR_API_KEY is not set.", err=True)
+        typer.echo(OCR_API_KEY_MISSING_MESSAGE, err=True)
         raise typer.Exit(1)
 
     client = HaulSafeOcrClient(

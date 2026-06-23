@@ -35,9 +35,8 @@ Maybe writes a status note                    Marks checklist items complete
 | PDF split (cover sheet + packet) | ✅ Working |
 | HaulSafe OCR + field extraction | ✅ Working |
 | CP Suite — auth, read WR, list tasks, list checklist | ✅ Working |
-| CP Suite — PATCH checklist, POST note, POST attachment | ✅ Working (Mode 4 proven on STC-WR-154) |
-| Review queue (local JSON / S3 markers) | ✅ Working |
-| SharePoint review queue | ⏳ Waiting on IT site-grant |
+| CP Suite — PATCH checklist, POST note, POST attachment | ✅ Working (proven on STC-WR-154) |
+| SharePoint review queue | ✅ Working |
 | AWS Lambda deployment (Docker + Terraform) | ✅ Ready, waiting on deploy access |
 
 ## The pipeline
@@ -111,17 +110,13 @@ python -m lcpt_scan_automation.entrypoints.local_cli cp-suite-token
 python scripts/make_e2e_test_scan.py
 # → prints something like: s3://fw-ocr-project/test-uploads/e2e-demo-abc123.pdf
 
-# Mode 3 — real S3 + real OCR, but DON'T touch CP Suite (safe)
+# Full end-to-end, including CP Suite writes against STAGING
 python -m lcpt_scan_automation.entrypoints.local_cli process-s3 \
-  --key test-uploads/e2e-demo-abc123.pdf --mock-cp
-
-# Mode 4 — full end-to-end, including CP Suite writes against STAGING
-python -m lcpt_scan_automation.entrypoints.local_cli process-s3 \
-  --key test-uploads/e2e-demo-abc123.pdf --real-cp
+   --key test-uploads/e2e-demo-abc123.pdf
 ```
 
 Open `https://cp3-staging.itscomply.com/work-requests/STC-WR-154` in your
-browser after Mode 4 — you'll see a new attachment, ticked checklist items,
+browser after the run — you'll see a new attachment, ticked checklist items,
 and an audit note.
 
 ### 4. Watch S3 like the deployed Lambda would
@@ -174,8 +169,8 @@ docs/                 # deployment guide, SharePoint setup guide
 tests/                # unit + integration tests
 ```
 
-Architecture: **ports & adapters**. Real S3/OCR/CP Suite live behind interfaces
-in `ports/`; we swap them for mocks in tests and Mode 3.
+Architecture: **ports & adapters**. Production runtime uses real S3, HaulSafe
+OCR, CP Suite, and SharePoint adapters; tests keep their own fakes outside `src/`.
 
 ## Common commands
 

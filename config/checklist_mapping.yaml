@@ -4,7 +4,7 @@
 # checklist item name as it appears in CP Suite.
 #
 # task_type           — the CP Suite task type string (exact match)
-# action              — one of: PROCESS_THROUGH_STATE_AGENCY | RECEIVE_CREDENTIALS | COMPLETE
+# action              — one of: PROCESS_THROUGH_STATE_AGENCY | RECEIVE_CREDENTIALS | SEND_CREDENTIALS
 # checklist_item_name — exact name of the checklist item in CP Suite (case-insensitive match at runtime)
 #
 # TODO: Replace placeholder task_type values and checklist_item_name values with
@@ -29,8 +29,8 @@ mappings:
     checklist_item_name: "Receive credentials"
 
   - task_type: "PLACEHOLDER_TASK_TYPE_A"
-    action: "COMPLETE"
-    checklist_item_name: "Complete"
+    action: "SEND_CREDENTIALS"
+    checklist_item_name: "Send credentials"
 
   - task_type: "PLACEHOLDER_TASK_TYPE_B"
     action: "PROCESS_THROUGH_STATE_AGENCY"
@@ -41,5 +41,5 @@ mappings:
     checklist_item_name: "Receive credentials"
 
   - task_type: "PLACEHOLDER_TASK_TYPE_B"
-    action: "COMPLETE"
-    checklist_item_name: "Complete"
+    action: "SEND_CREDENTIALS"
+    checklist_item_name: "Send credentials"

@@ -41,20 +41,58 @@ Design choices (and why):
    - If site creation is disabled for you, ask IT to create it (2 min for them).
 2. In the new site: **Site contents -> New -> Document library**.
    - Name: `Failed Scans`
-3. Add these columns to the library (**+ Add column**):
+3. Add these columns to the library (**+ Add column**). For the cleanest
+   Graph integration, create custom columns without spaces in the internal
+   name when possible; SharePoint can still display friendly names in the UI.
 
    | Column | Type | Notes |
    |---|---|---|
    | Status | Choice: `New`, `In Progress`, `Resolved` | default `New` |
    | Reason Code | Choice: `NO_COVER_SHEET`, `MISSING_REQUIRED_FIELD`, `INVALID_WR_NUMBER_FORMAT`, `WORK_REQUEST_NOT_FOUND`, `BOTH_ROUTES_CHECKED`, `NEITHER_ROUTE_CHECKED`, `MISSING_CHECKLIST_ITEM`, `OCR_FAILED`, `SINGLE_PAGE_PDF`, `CORRUPTED_PDF`, `UNEXPECTED_ERROR` | |
-   | Reason Details | Multiple lines of text | human-readable message |
+   | Reason Details | Single line of text | short reviewer-facing summary |
+   | Technical Details | Multiple lines of text | full raw error message; hide in the default view |
    | WR Number | Single line of text | what OCR extracted (may be empty) |
    | Rep | Single line of text | from the S3 folder name |
-   | Extracted Fields | Multiple lines of text | JSON dump of what OCR read |
+   | Source File | Single line of text | just the PDF filename, easier to scan than the full S3 key |
+   | Routing | Choice: `INTERNAL`, `EXTERNAL` | what OCR read from the route checkboxes |
+   | Checked Actions | Single line of text | readable list of selected cover-sheet actions |
+   | Completed By | Single line of text | what OCR read from the cover sheet |
+   | Scan Date | Date and time | what OCR read from the cover sheet |
+   | Extracted Fields | Multiple lines of text | compact readable OCR summary; hide in the default view unless needed |
+   | Raw OCR JSON | Multiple lines of text | full OCR payload for debugging; hide in the default view |
    | Scan ID | Single line of text | traces back to logs |
    | Source S3 Key | Single line of text | original bucket location |
    | Reviewer | Person | who is handling it |
-4. **Site permissions:** add the reviewer team (Jessica, Rachael, Cindy, ...)
+4. Create a default view for reviewers named `Manual Review`:
+
+   Show these columns, in this order:
+
+   | Order | Column |
+   |---:|---|
+   | 1 | Status |
+   | 2 | Reason Code |
+   | 3 | Reason Details |
+   | 4 | WR Number |
+   | 5 | Rep |
+   | 6 | Source File |
+   | 7 | Routing |
+   | 8 | Checked Actions |
+   | 9 | Completed By |
+   | 10 | Scan Date |
+   | 11 | Reviewer |
+
+   Hide these from the default view, but keep them available in the details
+   pane for troubleshooting: `Technical Details`, `Extracted Fields`,
+   `Raw OCR JSON`, `Scan ID`, `Source S3 Key`.
+
+   If the app logs `Field 'TechnicalDetails' is not recognized`, the file
+   upload still succeeded but the site is missing the new readable metadata
+   columns or their SharePoint internal names differ. The app will retry with
+   the original core columns (`Status`, `Reason Code`, `Reason Details`,
+   `WR Number`, `Rep`, `Extracted Fields`, `Scan ID`, `Source S3 Key`) so the
+   row is still categorized. Add the missing columns above, then rerun a
+   failed-scan test to populate the new readable fields.
+5. **Site permissions:** add the reviewer team (Jessica, Rachael, Cindy, ...)
    as **Members** (edit). Nobody else needs access. Do NOT add "Everyone".
 
 ## Part 2 — App registration (IT, ~15 min)
@@ -108,7 +146,6 @@ signed in with your work account:
 
 ```bash
 # ── SharePoint review queue ──────────────────────────────────────────
-REVIEW_QUEUE_BACKEND=sharepoint          # "local" = JSON files (dev default)
 GRAPH_TENANT_ID=<from IT>
 GRAPH_CLIENT_ID=<from IT>
 GRAPH_CLIENT_SECRET=<from Keeper>        # NEVER commit; rotate yearly
@@ -150,8 +187,8 @@ A `SharePointReviewQueue` adapter behind the existing `ReviewQueuePort`:
 2. uploads the original PDF: `PUT /sites/{site}/drives/{drive}/root:/{filename}:/content`,
 3. sets the metadata columns: `PATCH .../items/{item-id}/listItem/fields`.
 
-The pipeline doesn't change — same `review_queue.enqueue(item)` call that
-writes local JSON today. Switch backends via `REVIEW_QUEUE_BACKEND`.
+The pipeline doesn't change — failed scans call `review_queue.enqueue(item)`,
+and production writes them to SharePoint.
 
 ---
 

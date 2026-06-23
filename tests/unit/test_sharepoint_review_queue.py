@@ -7,16 +7,21 @@ network calls.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 import httpx
 import pytest
 import respx
 
-from lcpt_scan_automation.domain.enums import ProcessingState, ReviewReasonCode
+from lcpt_scan_automation.domain.enums import (
+    CoverSheetAction,
+    ProcessingState,
+    ReviewReasonCode,
+    RoutingType,
+)
 from lcpt_scan_automation.domain.errors import ReviewQueueError, StorageError
-from lcpt_scan_automation.domain.models import ReviewItem
+from lcpt_scan_automation.domain.models import CoverSheet, ReviewItem
 from lcpt_scan_automation.infrastructure.review_queue.sharepoint_review_queue import (
     GRAPH_BASE,
     LOGIN_BASE,
@@ -38,13 +43,15 @@ def _make_item(
     *,
     source_path: str = "UploadedFromSharedcifs/cpegg/scan.pdf",
     reason_code: ReviewReasonCode = ReviewReasonCode.UNEXPECTED_ERROR,
+    message: str = "OCR returned no work request number",
+    extracted_cover_sheet: Optional[CoverSheet] = None,
 ) -> ReviewItem:
     return ReviewItem(
         scan_id="scan-abc-123",
         source_path=source_path,
         reason_code=reason_code,
-        message="OCR returned no work request number",
-        extracted_cover_sheet=None,
+        message=message,
+        extracted_cover_sheet=extracted_cover_sheet,
         timestamp=datetime(2026, 6, 15, 12, 0, 0),
         processing_state=ProcessingState.REVIEW_REQUIRED,
         correlation_id="corr-abc-123",
@@ -106,10 +113,10 @@ def _mock_token(respx_mock: respx.MockRouter) -> respx.Route:
     )
 
 
-def _upload_url() -> str:
+def _upload_url(reason_code: str = "UNEXPECTED_ERROR") -> str:
     return (
         f"{GRAPH_BASE}/sites/{SITE_ID}/drives/{DRIVE_ID}"
-        f"/root:/scan-abc-123_UNEXPECTED_ERROR.pdf:/content"
+        f"/root:/scan-abc-123_{reason_code}.pdf:/content"
     )
 
 
@@ -194,12 +201,62 @@ class TestEnqueueHappyPath:
         body = json.loads(patch.calls.last.request.content)
         assert body["Status"] == "New"
         assert body["ReasonCode"] == "UNEXPECTED_ERROR"
-        assert body["ReasonDetails"] == "OCR returned no work request number"
+        assert body["ReasonDetails"] == "Unexpected processing error"
         assert body["Rep"] == "cpegg"  # second path segment
         assert body["ScanID"] == "scan-abc-123"
         assert body["SourceS3Key"] == "UploadedFromSharedcifs/cpegg/scan.pdf"
+        assert body["SourceFile"] == "scan.pdf"
         assert body["WRNumber"] == ""  # no cover sheet -> empty
         assert body["ExtractedFields"] == ""
+        assert body["TechnicalDetails"] == "OCR returned no work request number"
+        assert body["RawOcrJson"] == ""
+        assert body["Routing"] == ""
+        assert body["CheckedActions"] == ""
+        assert body["CompletedBy"] == ""
+        assert body["ScanDate"] == ""
+
+    @respx.mock
+    def test_metadata_payload_has_readable_cover_sheet_columns(self) -> None:
+        _mock_token(respx.mock)
+        respx.mock.put(_upload_url("CP_SUITE_ERROR")).mock(
+            return_value=httpx.Response(201, json={"id": "drive-item-1"})
+        )
+        patch = respx.mock.patch(_metadata_url()).mock(
+            return_value=httpx.Response(200, json={})
+        )
+
+        cover_sheet = CoverSheet(
+            work_request_number="KAG-WR-3984",
+            routing=RoutingType.INTERNAL,
+            checked_actions=[CoverSheetAction.PROCESS_THROUGH_STATE_AGENCY],
+            completed_by="Mary Schnick",
+            scan_date=date(2026, 6, 4),
+            raw_ocr={"workRequestNumber": "KAG-WR-3984", "debug": {"nested": True}},
+        )
+        _build_queue().enqueue(
+            _make_item(
+                source_path="test-uploads/cpegg/mschnick__20260610163444.pdf",
+                reason_code=ReviewReasonCode.CP_SUITE_ERROR,
+                message="CP Suite returned non-JSON (204): <html>large response</html>",
+                extracted_cover_sheet=cover_sheet,
+            )
+        )
+
+        body = json.loads(patch.calls.last.request.content)
+        assert body["ReasonDetails"] == "CP Suite error"
+        assert body["TechnicalDetails"] == "CP Suite returned non-JSON (204): <html>large response</html>"
+        assert body["WRNumber"] == "KAG-WR-3984"
+        assert body["SourceFile"] == "mschnick__20260610163444.pdf"
+        assert body["Routing"] == "INTERNAL"
+        assert body["CheckedActions"] == "Process through state agency"
+        assert body["CompletedBy"] == "Mary Schnick"
+        assert body["ScanDate"] == "2026-06-04"
+        assert body["ExtractedFields"] == (
+            "WR: KAG-WR-3984; Routing: INTERNAL; Actions: Process through state agency; "
+            "Completed by: Mary Schnick; Scan date: 2026-06-04"
+        )
+        assert '"raw_ocr"' not in body["ExtractedFields"]
+        assert json.loads(body["RawOcrJson"])["workRequestNumber"] == "KAG-WR-3984"
 
     @respx.mock
     def test_uses_pdf_content_type_header(self) -> None:
@@ -275,7 +332,7 @@ class TestEnqueueErrorPaths:
             _build_queue().enqueue(_make_item())
 
     @respx.mock
-    def test_metadata_failure_does_NOT_raise(self) -> None:
+    def test_metadata_failure_does_not_raise(self) -> None:
         """File was uploaded -- losing metadata isn't worth losing the
         whole review item over. Log loudly and move on.
         """
@@ -289,6 +346,77 @@ class TestEnqueueErrorPaths:
 
         # Should NOT raise -- file is saved, just un-categorized
         _build_queue().enqueue(_make_item())
+
+    @respx.mock
+    def test_missing_new_column_retries_with_legacy_metadata(self) -> None:
+        """If the site has not added the new readability columns yet, keep
+        populating the original columns instead of leaving the file uncategorized.
+        """
+        _mock_token(respx.mock)
+        respx.mock.put(_upload_url()).mock(
+            return_value=httpx.Response(201, json={"id": "drive-item-1"})
+        )
+        patch = respx.mock.patch(_metadata_url()).mock(
+            side_effect=[
+                httpx.Response(
+                    400,
+                    json={
+                        "error": {
+                            "code": "invalidRequest",
+                            "message": "Field 'TechnicalDetails' is not recognized",
+                        }
+                    },
+                ),
+                httpx.Response(200, json={}),
+            ]
+        )
+
+        _build_queue().enqueue(_make_item())
+
+        assert patch.call_count == 2
+        retry_body = json.loads(patch.calls[1].request.content)
+        assert retry_body["Status"] == "New"
+        assert retry_body["ReasonCode"] == "UNEXPECTED_ERROR"
+        assert retry_body["ReasonDetails"] == "Unexpected processing error"
+        assert retry_body["WRNumber"] == ""
+        assert retry_body["Rep"] == "cpegg"
+        assert retry_body["ExtractedFields"] == ""
+        assert retry_body["ScanID"] == "scan-abc-123"
+        assert retry_body["SourceS3Key"] == "UploadedFromSharedcifs/cpegg/scan.pdf"
+        assert "TechnicalDetails" not in retry_body
+        assert "SourceFile" not in retry_body
+
+    @respx.mock
+    def test_generic_metadata_400_retries_with_legacy_metadata(self) -> None:
+        """Graph sometimes returns only 'Invalid request' for a bad optional
+        metadata field. Retry with legacy columns for those 400s too.
+        """
+        _mock_token(respx.mock)
+        respx.mock.put(_upload_url()).mock(
+            return_value=httpx.Response(201, json={"id": "drive-item-1"})
+        )
+        patch = respx.mock.patch(_metadata_url()).mock(
+            side_effect=[
+                httpx.Response(
+                    400,
+                    json={
+                        "error": {
+                            "code": "invalidRequest",
+                            "message": "Invalid request",
+                        }
+                    },
+                ),
+                httpx.Response(200, json={}),
+            ]
+        )
+
+        _build_queue().enqueue(_make_item())
+
+        assert patch.call_count == 2
+        retry_body = json.loads(patch.calls[1].request.content)
+        assert retry_body["Status"] == "New"
+        assert retry_body["ReasonCode"] == "UNEXPECTED_ERROR"
+        assert "RawOcrJson" not in retry_body
 
     def test_raises_if_site_or_drive_id_missing(self) -> None:
         with pytest.raises(ReviewQueueError, match="site_id/drive_id missing"):

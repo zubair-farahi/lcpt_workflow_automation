@@ -17,12 +17,8 @@ import pytest
 from lcpt_scan_automation.domain.enums import ProcessingState
 from lcpt_scan_automation.domain.errors import StorageError
 from lcpt_scan_automation.domain.models import ScanEvent
-from lcpt_scan_automation.infrastructure.storage.local_storage import (
-    LocalStorage,
-    compute_file_hash,
-)
 from lcpt_scan_automation.infrastructure.storage.s3_storage import S3Storage
-from tests.conftest import build_use_case, make_pdf
+from tests.conftest import MockOcrClient, make_pdf
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -43,7 +39,7 @@ def _make_mock_s3(get_body: bytes = b"", etag: str = "abc123", size: int = 100):
     mock.put_object.return_value = {}
     # generate_presigned_url
     mock.generate_presigned_url.return_value = (
-        f"https://s3.amazonaws.com/test-bucket/key?AWSAccessKeyId=x&Expires=9999&Signature=y"
+        "https://s3.amazonaws.com/test-bucket/key?AWSAccessKeyId=x&Expires=9999&Signature=y"
     )
     # list_objects_v2
     mock.list_objects_v2.return_value = {"Contents": []}
@@ -126,8 +122,6 @@ def test_s3_pdf_is_downloaded_before_splitting(
     )
 
     settings_s3 = settings.model_copy(update={"lcpt_scan_bucket": "fw-ocr-project"})
-    from lcpt_scan_automation.infrastructure.ocr.mock_ocr_client import MockOcrClient
-
     ocr = MockOcrClient(
         extracted_info={
             "workRequestNumber": "PFG-WR-351",
@@ -182,7 +176,6 @@ def test_cover_sheet_uploaded_to_s3_before_ocr(
     storage = S3Storage(bucket="fw-ocr-project", client=mock_s3, presigned_url_expiry_seconds=900)
 
     settings_s3 = settings.model_copy(update={"lcpt_scan_bucket": "fw-ocr-project"})
-    from lcpt_scan_automation.infrastructure.ocr.mock_ocr_client import MockOcrClient
     from lcpt_scan_automation.application.audit_note_builder import AuditNoteBuilder
     from lcpt_scan_automation.application.checklist_mapper import ChecklistMapper
     from lcpt_scan_automation.application.process_scan import ProcessScanUseCase
@@ -242,7 +235,6 @@ def test_presigned_url_passed_to_ocr(
     storage = S3Storage(bucket="fw-ocr-project", client=mock_s3, presigned_url_expiry_seconds=900)
 
     settings_s3 = settings.model_copy(update={"lcpt_scan_bucket": "fw-ocr-project"})
-    from lcpt_scan_automation.infrastructure.ocr.mock_ocr_client import MockOcrClient
     from lcpt_scan_automation.application.audit_note_builder import AuditNoteBuilder
     from lcpt_scan_automation.application.checklist_mapper import ChecklistMapper
     from lcpt_scan_automation.application.process_scan import ProcessScanUseCase
@@ -301,7 +293,6 @@ def test_s3_access_denied_raises_storage_error(
     storage = S3Storage(bucket="fw-ocr-project", client=mock_s3)
 
     settings_s3 = settings.model_copy(update={"lcpt_scan_bucket": "fw-ocr-project"})
-    from lcpt_scan_automation.infrastructure.ocr.mock_ocr_client import MockOcrClient
     from lcpt_scan_automation.application.audit_note_builder import AuditNoteBuilder
     from lcpt_scan_automation.application.checklist_mapper import ChecklistMapper
     from lcpt_scan_automation.application.process_scan import ProcessScanUseCase
@@ -327,49 +318,3 @@ def test_s3_access_denied_raises_storage_error(
     assert len(review_files) >= 1
     item = json.loads(review_files[0].read_text())
     assert "AccessDenied" in item["message"] or "UNEXPECTED_ERROR" in item["reason_code"]
-
-
-# ── Test 7: Local storage flow still works without AWS credentials ─────────────
-
-def test_local_storage_flow_without_aws_credentials(
-    settings,
-    mock_cp,
-    idempotency_store,
-    review_queue,
-    local_storage: LocalStorage,
-    tmp_path: Path,
-):
-    """Ensure the local pipeline never requires boto3 or AWS credentials."""
-    # Write a real 2-page PDF to local storage
-    pdf_bytes = make_pdf(2)
-    filename = "scan_local_only.pdf"
-    local_storage.write_bytes(filename, pdf_bytes)
-    source_path = str(Path(local_storage._base / filename))
-
-    # Use content hash as local etag
-    content_hash = compute_file_hash(source_path)
-
-    from lcpt_scan_automation.infrastructure.ocr.mock_ocr_client import MockOcrClient
-
-    ocr = MockOcrClient(
-        extracted_info={
-            "workRequestNumber": "PFG-WR-351",
-            "attachDocumentsToInternalAttachments": "x",
-            "attachDocumentsToAttachments": "",
-            "processThroughStateAgency": "x",
-            "receiveCredentials": "",
-            "sendCredentials": "",
-            "additionalNotes": "",
-            "completedBy": "Jane",
-            "date": "2024-01-15",
-        }
-    )
-
-    use_case = build_use_case(settings, ocr, mock_cp, idempotency_store, review_queue, local_storage)
-    event = ScanEvent(source_path=source_path, etag=content_hash)
-    record = use_case.execute(event)
-
-    assert record.state == ProcessingState.SUCCESS
-    # No boto3 was imported or called — if it were, the test would fail with ImportError
-    # because boto3 is an optional dep (can verify by checking mock_cp.calls)
-    assert any(c["method"] == "add_system_note" for c in mock_cp.calls)

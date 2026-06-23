@@ -155,25 +155,24 @@ class ProcessScanUseCase:
 
         log.info("pdf_split", total_pages=split.total_pages)
 
-        # 3. Render the cover sheet to PNG and store alongside the packet.
-        #    HaulSafe's vision AI 500s on raw PDFs, so OCR gets an image.
-        #    Render from the ORIGINAL bytes (page 0): splitting via pypdf
-        #    strips the /AcroForm dict, which would blank out filled form
-        #    fields in the rendered image.
+        # 3. Render cover sheet (page 0) to PNG — HaulSafe's vision AI rejects
+        #    raw PDFs and returns FAILED. Render from the ORIGINAL bytes so the
+        #    AcroForm widget values (text, checkboxes) are not stripped by pypdf.
         try:
             cover_png_bytes = self._pdf.render_pdf_to_png(pdf_bytes)
         except PdfProcessingError as exc:
             return self._to_review(record, ReviewReasonCode.UNEXPECTED_ERROR, str(exc), None)
 
-        cover_key = f"processing/{record.scan_id}/cover_sheet.png"
-        packet_key = f"processing/{record.scan_id}/packet.pdf"
+        # Write PNG under the configured processing prefix, generate presigned URL,
+        # then clean it up after OCR so no temp files linger.
+        cover_key = f"{self._settings.lcpt_scan_processing_prefix}{record.scan_id}_cover.png"
         self._storage.write_bytes(cover_key, cover_png_bytes)
-        self._storage.write_bytes(packet_key, split.packet_bytes)
 
-        # 4. Get accessible URL for cover sheet page (OCR requirement)
+        # 4. Get presigned URL for the PNG so HaulSafe can fetch it over HTTPS.
         try:
             cover_url = self._storage.generate_accessible_url(cover_key)
         except StorageError as exc:
+            self._safe_delete(cover_key)
             return self._to_review(record, ReviewReasonCode.UNEXPECTED_ERROR, str(exc), None)
 
         # 5. Submit to OCR
@@ -181,6 +180,7 @@ class ProcessScanUseCase:
         try:
             submission = self._ocr.submit_document(cover_url, ocr_fields)
         except OcrError as exc:
+            self._safe_delete(cover_key)
             return self._to_review(record, ReviewReasonCode.OCR_FAILED, str(exc), None)
 
         log.info("ocr_submitted", request_id=submission.request_id)
@@ -192,13 +192,16 @@ class ProcessScanUseCase:
         )
         record.state = ProcessingState.AWAITING_OCR
 
-        # 6. Poll for OCR result
+        # 6. Poll for OCR result — delete temp PNG regardless of outcome
         try:
             ocr_result = self._poll_ocr(submission.request_id)
         except (OcrTimeoutError, OcrError) as exc:
+            self._safe_delete(cover_key)
             return self._to_review(
                 record, ReviewReasonCode.OCR_FAILED_OR_UNKNOWN_STATUS, str(exc), None
             )
+        finally:
+            self._safe_delete(cover_key)
 
         return self._process_from_ocr(record, ocr_result, split.packet_bytes)
 
@@ -229,6 +232,13 @@ class ProcessScanUseCase:
         raise OcrTimeoutError(
             f"OCR polling timed out after {max_attempts} attempts (request {request_id})"
         )
+
+    def _safe_delete(self, key: str) -> None:
+        """Delete a temp S3 object, logging but swallowing any error."""
+        try:
+            self._storage.delete(key)
+        except Exception as exc:
+            log.warning("temp_file_delete_failed", key=key, error=str(exc))
 
     def _process_from_ocr(
         self,

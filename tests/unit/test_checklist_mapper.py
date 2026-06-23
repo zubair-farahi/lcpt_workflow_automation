@@ -25,7 +25,7 @@ def mapping_yaml(tmp_path: Path) -> Path:
             },
             {
                 "task_type": "TYPE_B",
-                "action": "COMPLETE",
+                "action": "SEND_CREDENTIALS",
                 "checklist_item_name": "Mark complete",
             },
         ]
@@ -54,7 +54,7 @@ class TestChecklistMapper:
     def test_unknown_action_for_known_type_returns_none(self, mapping_yaml: Path):
         mapper = ChecklistMapper(mapping_yaml)
         result = mapper.get_checklist_item_name("TYPE_A", CoverSheetAction.SEND_CREDENTIALS)
-        assert result is None  # TYPE_A has no COMPLETE mapping in this fixture
+        assert result is None  # TYPE_A has no SEND_CREDENTIALS mapping in this fixture
 
     def test_missing_file_does_not_raise(self, tmp_path: Path):
         mapper = ChecklistMapper(tmp_path / "nonexistent.yaml")

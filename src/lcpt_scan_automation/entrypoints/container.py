@@ -11,88 +11,46 @@ from ..application.checklist_mapper import ChecklistMapper
 from ..application.handle_ocr_callback import HandleOcrCallbackUseCase
 from ..application.process_scan import ProcessScanUseCase
 from ..config.settings import Settings
-from ..infrastructure.cp_suite.mock_cp_suite_client import MockCpSuiteClient
 from ..infrastructure.idempotency.memory_idempotency_store import MemoryIdempotencyStore
-from ..infrastructure.idempotency.s3_idempotency_store import S3IdempotencyStore
 from ..infrastructure.ocr.haulsafe_client import HaulSafeOcrClient
-from ..infrastructure.ocr.mock_ocr_client import MockOcrClient
 from ..infrastructure.pdf.pypdf_processor import PypdfProcessor
-from ..infrastructure.review_queue.local_review_queue import LocalReviewQueue
-from ..infrastructure.review_queue.s3_review_queue import S3ReviewQueue
 from ..infrastructure.review_queue.sharepoint_review_queue import SharePointReviewQueue
-from ..infrastructure.storage.local_storage import LocalStorage
 from ..infrastructure.storage.s3_storage import S3Storage
 
 
 def build_process_scan_use_case(
     settings: Settings,
     *,
-    use_mock_ocr: bool = False,
-    use_mock_cp: bool = False,
-    use_s3: bool = False,
     s3_client=None,
 ) -> ProcessScanUseCase:
-    if use_s3:
-        storage = S3Storage(
-            bucket=settings.lcpt_scan_bucket,
-            region=settings.aws_region,
-            presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
-            aws_access_key_id=settings.aws_access_key_id or None,
-            aws_secret_access_key=settings.aws_secret_access_key or None,
-            client=s3_client,
-        )
-    else:
-        storage = LocalStorage(
-            base_dir=settings.local_storage_dir,
-            base_url=settings.local_storage_base_url or None,
-        )
-
-    ocr_client = (
-        MockOcrClient()
-        if use_mock_ocr
-        else HaulSafeOcrClient(
-            base_url=settings.haul_ocr_base_url,
-            api_key=settings.haul_ocr_api_key,
-        )
+    storage = S3Storage(
+        bucket=settings.lcpt_scan_bucket,
+        region=settings.aws_region,
+        presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
+        aws_access_key_id=settings.aws_access_key_id or None,
+        aws_secret_access_key=settings.aws_secret_access_key or None,
+        client=s3_client,
     )
 
-    cp_client = (
-        MockCpSuiteClient()
-        if use_mock_cp
-        else _build_real_cp_client(settings)
+    ocr_client = HaulSafeOcrClient(
+        base_url=settings.haul_ocr_base_url,
+        api_key=settings.haul_ocr_api_key,
     )
 
-    # Dedup memory: S3 markers in production (durable, shared across
-    # laptop watcher + Lambda); in-memory for local mock runs and tests.
-    idempotency_store = (
-        S3IdempotencyStore(storage=storage, prefix=settings.s3_state_prefix)
-        if use_s3
-        else MemoryIdempotencyStore()
+    cp_client = _build_real_cp_client(settings)
+
+    # Dedup memory: always use in-memory store (S3IdempotencyStore requires
+    # s3:PutObject on state/scans/ which the IAM user may not have).
+    idempotency_store = MemoryIdempotencyStore()
+    review_queue = SharePointReviewQueue(
+        tenant_id=settings.graph_tenant_id,
+        client_id=settings.graph_client_id,
+        client_secret=settings.graph_client_secret,
+        site_id=settings.sharepoint_site_id,
+        drive_id=settings.sharepoint_drive_id,
+        storage=storage,
+        timeout_seconds=settings.sharepoint_timeout_seconds,
     )
-    # Review queue: explicit backend selection.
-    #   "sharepoint" -> Failed Scans SharePoint library (preferred for prod)
-    #   "s3"         -> JSON markers under review_queue/ in the scan bucket
-    #   "local"      -> JSON files on disk (dev default)
-    # Backwards compat: if backend is unset and use_s3=True, fall back to s3.
-    backend = (settings.review_queue_backend or "").lower()
-    if not backend:
-        backend = "s3" if use_s3 else "local"
-    if backend == "sharepoint":
-        review_queue = SharePointReviewQueue(
-            tenant_id=settings.graph_tenant_id,
-            client_id=settings.graph_client_id,
-            client_secret=settings.graph_client_secret,
-            site_id=settings.sharepoint_site_id,
-            drive_id=settings.sharepoint_drive_id,
-            storage=storage,
-            timeout_seconds=settings.sharepoint_timeout_seconds,
-        )
-    elif backend == "s3":
-        review_queue = S3ReviewQueue(
-            storage=storage, prefix=settings.s3_review_queue_prefix
-        )
-    else:
-        review_queue = LocalReviewQueue(queue_dir=settings.review_queue_dir)
     checklist_mapper = ChecklistMapper(settings.checklist_mapping_path)
     audit_note_builder = AuditNoteBuilder()
 
@@ -112,16 +70,10 @@ def build_process_scan_use_case(
 def build_handle_ocr_callback_use_case(
     settings: Settings,
     *,
-    use_mock_cp: bool = False,
-    use_s3: bool = False,
     s3_client=None,
 ) -> HandleOcrCallbackUseCase:
-    # The callback path doesn't re-submit to OCR, so always use mock OCR
     use_case = build_process_scan_use_case(
         settings,
-        use_mock_ocr=True,
-        use_mock_cp=use_mock_cp,
-        use_s3=use_s3,
         s3_client=s3_client,
     )
     return HandleOcrCallbackUseCase(process_scan=use_case)

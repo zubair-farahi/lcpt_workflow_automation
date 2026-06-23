@@ -7,9 +7,9 @@ Usage:
     python scripts/make_e2e_test_scan.py            # build + upload
     python scripts/make_e2e_test_scan.py --no-upload  # build only
 
-Then process it end-to-end (Mode 4):
+Then process it end-to-end:
     python -m lcpt_scan_automation.entrypoints.local_cli process-s3 \
-        --key <printed-key> --real-cp
+        --key <printed-key>
 """
 
 from __future__ import annotations
@@ -105,8 +105,8 @@ def main() -> int:
     storage.write_bytes(key, pdf)
     print(f"Uploaded:  s3://{s.lcpt_scan_bucket}/{key}")
     print()
-    print("Now run the full Mode 4 pipeline on it:")
-    print(f'  python -m lcpt_scan_automation.entrypoints.local_cli process-s3 --key "{key}" --real-cp')
+    print("Now run the full production pipeline on it:")
+    print(f'  python -m lcpt_scan_automation.entrypoints.local_cli process-s3 --key "{key}"')
     return 0
 
 

@@ -2,10 +2,9 @@
 
 Polls UploadedFromSharedcifs/ every N seconds, filters out the noise (acetera /
 Pepsi which is not in the cover-sheet pilot, plus FedEx receipts and tiny
-files), and runs each new PDF through the Mode 3 pipeline.
+files), and runs each new PDF through the production pipeline.
 
-Idempotency comes from the pipeline's existing SQLite store — restarting the
-watcher won't reprocess files that already succeeded.
+Idempotency is handled by the configured pipeline idempotency store.
 
 Usage:
     python scripts/watch_s3_for_scans.py
@@ -56,14 +55,6 @@ def main() -> int:
                              "Example: --include cpegg lmcnair")
     parser.add_argument("--min-size", type=int, default=100_000,
                         help="Skip files smaller than this many bytes (default: 100KB)")
-    parser.add_argument(
-        "--mock-cp", dest="mock_cp", action="store_true", default=True,
-        help="Use mocked CP Suite client (Mode 3). DEFAULT.",
-    )
-    parser.add_argument(
-        "--real-cp", dest="mock_cp", action="store_false",
-        help="Use real CP Suite client (Mode 4 — full end-to-end)",
-    )
     args = parser.parse_args()
 
     from lcpt_scan_automation.config.settings import Settings, configure_logging
@@ -85,12 +76,8 @@ def main() -> int:
     settings_for_use = settings.model_copy(update={"lcpt_scan_bucket": bucket})
     use_case = build_process_scan_use_case(
         settings_for_use,
-        use_mock_cp=args.mock_cp,
-        use_s3=True,
         s3_client=storage._client,
     )
-
-    mode = "Mode 3 (mock CP)" if args.mock_cp else "Mode 4 (real CP)"
 
     skip_set = _load_user_set(settings.lcpt_skip_users, _FALLBACK_SKIP)
     settings_include = _load_user_set(settings.lcpt_include_users, set())
@@ -101,7 +88,7 @@ def main() -> int:
     skip_str = ", ".join(sorted(skip_set)) or "(none)"
 
     print(f"Watching s3://{bucket}/{args.prefix}")
-    print(f"  Mode         : {mode}")
+    print("  Mode         : production end-to-end")
     print(f"  Include reps : {include_str}")
     print(f"  Skip clients : {skip_str}")
     print(f"  Min size     : {args.min_size:,} bytes")
@@ -110,6 +97,7 @@ def main() -> int:
     print()
 
     iteration = 0
+    seen_terminal_records = {}
 
     while True:
         iteration += 1
@@ -143,16 +131,25 @@ def main() -> int:
         errored = 0
 
         for o in candidates:
+            source_identity = (o.key, o.etag or "")
+            was_seen = source_identity in seen_terminal_records
+            if was_seen:
+                skipped_dup += 1
+                print(f"  - duplicate  {o.key}  ({seen_terminal_records[source_identity]})")
+                continue
             try:
                 event = ScanEvent(source_path=o.key, etag=o.etag or "")
                 record = use_case.execute(event)
                 state = str(record.state)
-                if state == "SUCCESS" and record.created_at != record.updated_at:
-                    skipped_dup += 1  # rough proxy for "already processed"
+                classification = _classify_processed_record(record, was_seen)
+                if classification == "duplicate":
+                    skipped_dup += 1
                     print(f"  - duplicate  {o.key}  ({state})")
                 else:
                     processed += 1
                     print(f"  + {state:<18}  {o.key}  (scan_id={record.scan_id[:12]}...)")
+                if state in {"SUCCESS", "REVIEW_REQUIRED"}:
+                    seen_terminal_records[source_identity] = state
             except Exception as exc:
                 errored += 1
                 print(f"  ! ERROR  {o.key}: {exc}", file=sys.stderr)
@@ -199,6 +196,12 @@ def _filter_candidates(objs, include_set, min_size, skip_set):
     # Sort oldest first so we process in roughly upload order
     candidates.sort(key=lambda o: o.last_modified or "")
     return candidates
+
+
+def _classify_processed_record(record, was_seen):
+    if str(record.state) in {"SUCCESS", "REVIEW_REQUIRED"} and was_seen:
+        return "duplicate"
+    return "processed"
 
 
 if __name__ == "__main__":

@@ -155,6 +155,10 @@ class S3Storage:
         except Exception as exc:
             self._raise_storage_error(exc, "delete_object", key)
 
+    def delete(self, path: str) -> None:
+        """StoragePort.delete — delegates to delete_object."""
+        self.delete_object(path)
+
     def build_idempotency_key(self, key: str, etag: Optional[str] = None) -> str:
         """Return bucket/key:etag — the canonical idempotency key for S3 objects."""
         return f"{self._bucket}/{key}:{etag or ''}"

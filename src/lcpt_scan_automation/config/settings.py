@@ -60,17 +60,8 @@ class Settings(BaseSettings):
 
     s3_presigned_url_expiry_seconds: int = 900
 
-    # ── Local storage ─────────────────────────────────────────────────────────
-    local_storage_dir: str = "./data"
-    local_storage_base_url: str = ""
-
     # ── Review queue ──────────────────────────────────────────────────────────
-    review_queue_dir: str = "./review_queue"
-    # Backend selection: "local" (dev, JSON files), "s3" (Lambda, JSON in S3),
-    # or "sharepoint" (PDFs + metadata columns in SharePoint).
-    review_queue_backend: str = "local"
-
-    # ── SharePoint (review queue backend) ─────────────────────────────────────
+    # Failed scans are uploaded to SharePoint via Microsoft Graph.
     # App-only Graph creds (from IT). The app must have Sites.Selected
     # permission AND a site-level grant on the LCPT Scan Review site --
     # see docs/sharepoint-review-queue-setup.md.
@@ -93,9 +84,6 @@ class Settings(BaseSettings):
     # S3 prefix where processed-scan state markers are written (replaces
     # the old local SQLite idempotency DB)
     s3_state_prefix: str = "state/"
-    # S3 prefix for review-queue items (used when storage is S3)
-    s3_review_queue_prefix: str = "review_queue/"
-
     lcpt_skip_users: str = ""        # Comma-separated reps to skip
     lcpt_include_users: str = ""     # Comma-separated reps to process (empty = all)
 

@@ -13,12 +13,8 @@ import pytest
 from lcpt_scan_automation.config.settings import Settings
 from lcpt_scan_automation.domain.enums import ProcessingState, ReviewReasonCode
 from lcpt_scan_automation.domain.models import ScanEvent
-from lcpt_scan_automation.infrastructure.cp_suite.mock_cp_suite_client import MockCpSuiteClient
 from lcpt_scan_automation.infrastructure.idempotency.memory_idempotency_store import MemoryIdempotencyStore
-from lcpt_scan_automation.infrastructure.ocr.mock_ocr_client import MockOcrClient
-from lcpt_scan_automation.infrastructure.review_queue.local_review_queue import LocalReviewQueue
-from lcpt_scan_automation.infrastructure.storage.local_storage import LocalStorage
-from tests.conftest import build_use_case, make_pdf
+from tests.conftest import LocalStorage, MockCpSuiteClient, MockOcrClient, build_use_case, make_pdf
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

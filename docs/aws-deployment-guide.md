@@ -150,7 +150,7 @@ Failed-validation scans appear in `s3://fw-ocr-project/review_queue/`.
 Notes:
 - Local container runs use YOUR AWS keys from the environment; the deployed
   Lambda uses its IAM role instead (no keys anywhere).
-- `--mock` anything is gone: this is the full Mode 4 path. It will write to
+- `--mock` anything is gone: this is the full production path. It will write to
   CP Suite STAGING per the env config — only feed it cover sheets pointing
   at safe WRs (the e2e test scan targets STC-WR-154).
 

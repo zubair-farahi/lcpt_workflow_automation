@@ -69,7 +69,7 @@ def handle_s3_event(event: dict[str, Any], context: Any) -> dict[str, Any]:
             continue
 
         scan_event = ScanEvent(source_path=object_key, etag=etag)
-        use_case = build_process_scan_use_case(settings, use_s3=True)
+        use_case = build_process_scan_use_case(settings)
 
         try:
             scan_record = use_case.execute(scan_event)
@@ -125,7 +125,7 @@ def handle_ocr_webhook(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if not ocr_result.request_id:
         return {"statusCode": 400, "body": json.dumps({"error": "Missing requestId"})}
 
-    use_case = build_handle_ocr_callback_use_case(settings, use_s3=True)
+    use_case = build_handle_ocr_callback_use_case(settings)
     try:
         scan_record = use_case.execute(ocr_result)
         return {

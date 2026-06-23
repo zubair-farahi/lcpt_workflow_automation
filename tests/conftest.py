@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import json
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -14,12 +16,151 @@ from lcpt_scan_automation.application.audit_note_builder import AuditNoteBuilder
 from lcpt_scan_automation.application.checklist_mapper import ChecklistMapper
 from lcpt_scan_automation.application.process_scan import ProcessScanUseCase
 from lcpt_scan_automation.config.settings import Settings
-from lcpt_scan_automation.infrastructure.cp_suite.mock_cp_suite_client import MockCpSuiteClient
+from lcpt_scan_automation.domain.errors import CpSuiteNotFoundError, StorageError
+from lcpt_scan_automation.domain.models import ChecklistItem, OcrResult, OcrSubmissionResult, ReviewItem, Task, WorkRequest
 from lcpt_scan_automation.infrastructure.idempotency.memory_idempotency_store import MemoryIdempotencyStore
-from lcpt_scan_automation.infrastructure.ocr.mock_ocr_client import MockOcrClient
 from lcpt_scan_automation.infrastructure.pdf.pypdf_processor import PypdfProcessor
-from lcpt_scan_automation.infrastructure.review_queue.local_review_queue import LocalReviewQueue
-from lcpt_scan_automation.infrastructure.storage.local_storage import LocalStorage
+
+
+def compute_file_hash(path: str | Path) -> str:
+    file_path = Path(path)
+    digest = hashlib.sha256()
+    with file_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+class LocalStorage:
+    def __init__(self, base_dir: str | Path, base_url: str = "http://localhost:9999/files") -> None:
+        self._base = Path(base_dir)
+        self._base_url = base_url.rstrip("/")
+
+    def read_bytes(self, path: str) -> bytes:
+        full = self._resolve(path)
+        if not full.exists():
+            raise StorageError(f"File not found: {full}")
+        return full.read_bytes()
+
+    def write_bytes(self, path: str, data: bytes) -> None:
+        full = self._resolve(path)
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_bytes(data)
+
+    def exists(self, path: str) -> bool:
+        return self._resolve(path).exists()
+
+    def generate_accessible_url(self, path: str, expires_in_seconds: int = 3600) -> str:
+        return f"{self._base_url}/{Path(path).name}"
+
+    def delete(self, path: str) -> None:
+        full = self._resolve(path)
+        if full.exists():
+            full.unlink()
+
+    def _resolve(self, path: str) -> Path:
+        candidate = Path(path)
+        return candidate if candidate.is_absolute() else self._base / path
+
+
+class MockOcrClient:
+    def __init__(self, extracted_info: dict[str, Any] | None = None, status: str = "COMPLETED") -> None:
+        self.extracted_info = extracted_info or {}
+        self.status = status
+        self.submitted_urls: list[str] = []
+
+    def submit_document(self, document_url, fields):
+        self.submitted_urls.append(document_url)
+        return OcrSubmissionResult(request_id="mock-ocr-request", status="QUEUED")
+
+    def get_result(self, request_id: str) -> OcrResult:
+        return OcrResult(
+            request_id=request_id,
+            status=self.status,
+            extracted_info=self.extracted_info,
+        )
+
+
+class MockCpSuiteClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._work_requests: dict[str, WorkRequest] = {}
+        self._tasks_by_wr: dict[str, list[Task]] = {}
+        self._items_by_task: dict[str, list[ChecklistItem]] = {}
+
+    def add_work_request(self, wr_number: str, client_name: str | None = None) -> WorkRequest:
+        wr = WorkRequest(
+            work_request_id=f"wr-{len(self._work_requests) + 1}",
+            work_request_number=wr_number,
+            client_name=client_name,
+            title=client_name,
+            location_id="loc-1",
+            client_root_location_id="root-loc-1",
+        )
+        self._work_requests[wr_number] = wr
+        self._tasks_by_wr[wr.work_request_id] = []
+        return wr
+
+    def add_task(self, wr_id: str, task_type: str, name: str = "Task") -> Task:
+        task = Task(task_id=f"task-{len(self._items_by_task) + 1}", task_type=task_type, name=name)
+        self._tasks_by_wr.setdefault(wr_id, []).append(task)
+        self._items_by_task[task.task_id] = []
+        return task
+
+    def add_checklist_item(self, task_id: str, name: str) -> ChecklistItem:
+        item = ChecklistItem(
+            item_id=f"item-{len(self._items_by_task.get(task_id, [])) + 1}",
+            name=name,
+            is_complete=False,
+            task_id=task_id,
+        )
+        self._items_by_task.setdefault(task_id, []).append(item)
+        return item
+
+    def get_work_request(self, wr_number: str) -> WorkRequest:
+        self.calls.append({"method": "get_work_request", "wr_number": wr_number})
+        try:
+            return self._work_requests[wr_number]
+        except KeyError as exc:
+            raise CpSuiteNotFoundError(wr_number) from exc
+
+    def attach_pdf_internal(self, work_request: WorkRequest, pdf_bytes: bytes, filename: str) -> None:
+        self.calls.append({"method": "attach_pdf_internal", "filename": filename})
+
+    def attach_pdf_external(self, work_request: WorkRequest, pdf_bytes: bytes, filename: str) -> None:
+        self.calls.append({"method": "attach_pdf_external", "filename": filename})
+
+    def get_tasks(self, wr_id: str) -> list[Task]:
+        self.calls.append({"method": "get_tasks", "wr_id": wr_id})
+        return list(self._tasks_by_wr.get(wr_id, []))
+
+    def get_checklist_items(self, task_id: str) -> list[ChecklistItem]:
+        self.calls.append({"method": "get_checklist_items", "task_id": task_id})
+        return list(self._items_by_task.get(task_id, []))
+
+    def mark_checklist_item_complete(self, task_id: str, item_id: str) -> None:
+        self.calls.append({"method": "mark_checklist_item_complete", "task_id": task_id, "item_id": item_id})
+        for item in self._items_by_task.get(task_id, []):
+            if item.item_id == item_id:
+                item.is_complete = True
+
+    def add_system_note(self, wr_id: str, note: str) -> None:
+        self.calls.append({"method": "add_system_note", "wr_id": wr_id, "note": note})
+
+
+class LocalReviewQueue:
+    def __init__(self, queue_dir: str | Path) -> None:
+        self._queue_dir = Path(queue_dir)
+        self._queue_dir.mkdir(parents=True, exist_ok=True)
+        self.items: list[ReviewItem] = []
+
+    def enqueue(self, item: ReviewItem) -> None:
+        self.items.append(item)
+        filename = f"{item.scan_id}_{item.reason_code}.json"
+        (self._queue_dir / filename).write_text(
+            json.dumps(item.model_dump(mode="json"), indent=2, default=str),
+            encoding="utf-8",
+        )
 
 
 # ── PDF helpers ────────────────────────────────────────────────────────────────
@@ -94,10 +235,6 @@ def tmp_fields_yaml(tmp_path: Path) -> Path:
 @pytest.fixture
 def settings(tmp_path: Path, tmp_mapping_yaml: Path, tmp_fields_yaml: Path) -> Settings:
     return Settings(
-        local_storage_dir=str(tmp_path / "storage"),
-        # Give LocalStorage a fake base URL so generate_accessible_url works in tests
-        local_storage_base_url="http://localhost:9999/files",
-        review_queue_dir=str(tmp_path / "review"),
         haul_ocr_api_key="test-key",
         haul_ocr_poll_interval_seconds=0.0,
         haul_ocr_max_attempts=3,
